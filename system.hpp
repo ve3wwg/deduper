@@ -36,11 +36,14 @@ public:	Uid() : next_uid(1) {};
 extern Uid uid_pool;
 
 class Files {
+public:
 	std::unordered_map<Fileno_t,s_file_ent> fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
 
-public:	Files() {};
 	Fileno_t add(struct stat& sinfo);
+
+public:	Files() {};
+	Fileno_t add(const char *path);
 	s_file_ent& lookup(dev_t dev,ino_t ino);
 	s_file_ent& lookup(Fileno_t fileno);
 };
