@@ -12,10 +12,11 @@ all:	Makefile.deps $(TARGETS)
 
 install: all
 
-OBJS	= system.o dir.o
+OBJS	= system.o dir.o deduper.o
 XOBJS	= system.x1o dir.o
 
 deduper: $(OBJS)
+	$(CXX) -o deduper $(OBJS) $(LDFLAGS)
 
 test_system: $(XOBJS)
 	$(CXX) -o a.out $(XOBJS)  $(LDFLAGS)
