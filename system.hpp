@@ -8,6 +8,7 @@
 
 #include "config.hpp"
 
+#include <stdarg.h>
 #include <stdint.h>
 
 #include <sys/types.h>
@@ -50,6 +51,8 @@ public:	Files() {};
 	s_file_ent& lookup(Fileno_t fileno);
 };
 
+void vtracef(int level,const char *format,va_list ap);
+void tracef(int level,const char *format,...) __attribute__((format(printf,2,3)));
 
 #endif // SYSTEM_HPP
 

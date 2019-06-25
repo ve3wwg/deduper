@@ -68,6 +68,29 @@ Files::lookup(Fileno_t fileno) {
 	return it->second;
 }
 
+void
+vtracef(int level,const char *format,va_list ap) {
+	extern int opt_verbose;
+
+	if ( opt_verbose < level )
+		return;
+
+	vprintf(format,ap);
+}
+
+void
+tracef(int level,const char *format,...) {
+	extern int opt_verbose;
+
+	if ( opt_verbose < level )
+		return;
+
+	va_list ap;
+	va_start(ap,format);
+	vprintf(format,ap);
+	va_end(ap);
+}
+
 #if UNIT_TEST
 
 Uid uid_pool;
