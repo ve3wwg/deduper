@@ -6,6 +6,8 @@
 #ifndef SYSTEM_HPP
 #define SYSTEM_HPP
 
+#include "config.hpp"
+
 #include <stdint.h>
 
 #include <sys/types.h>
