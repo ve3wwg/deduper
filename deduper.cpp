@@ -13,6 +13,7 @@
 #include <getopt.h>
 
 #include "system.hpp"
+#include "dir.hpp"
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
@@ -23,8 +24,60 @@ static const char *version = "0.1";
 int opt_verbose = 0;
 int opt_version = 0;
 std::vector<std::string> opt_rootvec;
+int exit_code = 0;
 
 Uid uid_pool;
+Files files;
+
+static void
+dive(const std::string directory) {
+	Dir dir;
+	std::string path;
+	struct stat sbuf;
+	Fileno_t fileno;
+	int rc;
+
+	rc = dir.open(directory.c_str());
+	if ( rc ) {
+		fprintf(stderr,"%s: opening directory %s\n",
+			strerror(rc),
+			directory.c_str());
+		exit_code |= 2;
+		return;
+	}
+	tracef(1,"Examining dir %s\n",directory.c_str());
+
+	while ( (rc = dir.read(path,"*",Dir::Any)) == 0 ) {
+		rc = ::stat(path.c_str(),&sbuf);
+		if ( rc != 0 ) {
+			if ( errno == ENOENT ) {
+				::lstat(path.c_str(),&sbuf);
+				if ( S_ISLNK(sbuf.st_mode) ) {
+					fprintf(stderr,"Ignoring symlink %s\n",path.c_str());
+					continue;
+				}
+			}
+
+			fprintf(stderr,"%s: stat(2) on '%s'\n",strerror(errno),path.c_str());
+			continue;
+		}
+
+		if ( S_ISREG(sbuf.st_mode) ) {
+			fileno = files.add(path.c_str());
+			tracef(2,"%ld: file %s\n",long(fileno),path.c_str());
+		} else if ( S_ISDIR(sbuf.st_mode) ) {
+			dive(path);
+		} else	{
+			tracef(1,"Ignoring %s\n",path.c_str());
+		}
+	}
+	dir.close();
+
+	if ( rc != ENOENT ) {
+		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),path.c_str());
+		exit_code |= 2;
+	}
+}
 
 int
 main(int argc,char **argv) {
@@ -95,7 +148,10 @@ main(int argc,char **argv) {
 			exit(1);
 	}
 
-	return 0;
+	for ( auto& dir : opt_rootvec )
+		dive(dir);
+
+	return exit_code;
 }
 
 // End deduper.cpp

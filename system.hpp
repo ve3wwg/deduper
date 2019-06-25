@@ -30,6 +30,7 @@ struct s_file_ent {
 
 class Uid {
 	uint64_t	next_uid;
+
 public:	Uid() : next_uid(1) {};
 	uint64_t allocate() {
 		return next_uid++;
