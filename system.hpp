@@ -16,6 +16,7 @@
 #include <time.h>
 
 #include <unordered_map>
+#include <unordered_set>
 
 typedef uint64_t Fileno_t;
 
@@ -40,9 +41,9 @@ public:	Uid() : next_uid(1) {};
 extern Uid uid_pool;
 
 class Files {
-public:
 	std::unordered_map<Fileno_t,s_file_ent> fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
+	std::unordered_map<off_t,std::unordered_set<Fileno_t>> by_size;
 
 	Fileno_t add(struct stat& sinfo);
 

@@ -19,7 +19,7 @@ Files::add(const char *path) {
 	struct stat sbuf;
 	int rc;
 
-	rc = stat("system.cpp",&sbuf);
+	rc = stat(path,&sbuf);
 	assert(!rc);
 	return add(sbuf);
 }
@@ -48,6 +48,8 @@ Files::add(struct stat& sinfo) {
 	fent.st_mtimespec.tv_sec = sinfo.st_mtime;
 	fent.st_mtimespec.tv_nsec = 0;
 #endif
+	// Track files by size
+	by_size[fent.st_size].insert(fileno);
 	return fileno;
 }
 
