@@ -18,6 +18,8 @@
 
 #include <vector>
 
+static const char *version = "0.1";
+
 int opt_verbose = 0;
 int opt_version = 0;
 std::vector<std::string> opt_rootvec;
@@ -31,15 +33,7 @@ main(int argc,char **argv) {
 	static struct option long_options[] = {
 		{"verbose",  	no_argument,		nullptr,	'v' },	// 0
 		{"version",	no_argument,		&opt_version,	1 },	// 1
-#if 0
-		{"add",     	required_argument, 	0,  0 },
-		{"append",  	no_argument,       	0,  0 },
-		{"delete",  	required_argument, 	0,  0 },
-		{"verbose", 	no_argument,       	0,  0 },
-		{"create",  	required_argument, 	0, 'c'},
-		{"file",    	required_argument, 	0,  0 },
-#endif
-		{0,         	0,             		0,  0 }
+		{0,         	0,             		nullptr,	0 },	// End
 	};
 	int option_index = 0;
 	int ch;
@@ -63,7 +57,10 @@ main(int argc,char **argv) {
 		}
 	}
 
-	printf("opt_verbose=%d, opt_version=%d\n",opt_verbose,opt_version);
+	if ( opt_version ) {
+		printf("Version: %s\n",version);
+		exit(0);
+	}
 
 	if ( optind < argc ) {
 		while ( optind < argc )
