@@ -42,7 +42,12 @@ Files::add(struct stat& sinfo) {
 	fent.st_ino = sinfo.st_ino;
 	fent.st_size = sinfo.st_size;
 	fent.st_nlink = sinfo.st_nlink;
+#if ST_MTIMESPEC
 	fent.st_mtimespec = sinfo.st_mtimespec;
+#else
+	fent.st_mtimespec.tv_sec = sinfo.st_mtime;
+	fent.st_mtimespec.tv_nsec = 0;
+#endif
 	return fileno;
 }
 
