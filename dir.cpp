@@ -100,13 +100,13 @@ Dir::read(std::string& name,const char *wildpattern,FileType ftype) {
 }
 
 std::string
-basename(const std::string& path) {
+Dir::basename(const std::string& path) {
 	return basename(path.c_str());
 }
 
 std::string
-basename(const char *path) {
-	char *r = strrchr(path,'/');
+Dir::basename(const char *path) {
+	const char *r = strrchr(path,'/');
 
 	if ( !r )
 		return path;
