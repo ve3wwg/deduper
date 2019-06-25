@@ -35,10 +35,10 @@ public: Dir();
 	inline bool is_open() { return dir != 0; }
 	
 	int read(std::string& name,const char *wildpattern,FileType ftype);
-};
 
-std::string basename(const std::string& path);
-std::string basename(const char *path);
+	static std::string basename(const std::string& path);
+	static std::string basename(const char *path);
+};
 
 #endif // DIRENT_HPP
 
