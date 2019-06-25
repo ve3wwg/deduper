@@ -53,6 +53,19 @@ Files::add(struct stat& sinfo) {
 	return fileno;
 }
 
+void
+Files::merge(const Files& other) {
+	
+	for ( const auto& pair : other.fmap ) {
+		const Fileno_t fileno = pair.first;
+		const s_file_ent& fent = pair.second;
+
+		fmap[fileno] = fent;
+		rmap[fent.st_dev][fent.st_ino] = fileno;
+		by_size[fent.st_size].insert(fileno);
+	}
+}
+
 s_file_ent&
 Files::lookup(dev_t dev,ino_t ino) {
 	auto it = rmap.find(dev);

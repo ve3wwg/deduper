@@ -17,6 +17,7 @@
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
+#include <thread>
 #include <vector>
 
 static const char *version = "0.1";
@@ -27,10 +28,64 @@ std::vector<std::string> opt_rootvec;
 int exit_code = 0;
 
 Uid uid_pool;
-Files files;
+
+static Files *files = nullptr;
+std::vector<Files*> filevec;
+std::vector<std::thread> thvec;
 
 static void
-dive(const std::string directory) {
+dive(const std::string directory,unsigned thno) {
+	Files *files = filevec[thno];
+	Dir dir;
+	std::string path;
+	struct stat sbuf;
+	Fileno_t fileno;
+	int rc;
+
+	rc = dir.open(directory.c_str());
+	if ( rc ) {
+		fprintf(stderr,"%s: opening directory %s\n",
+			strerror(rc),
+			directory.c_str());
+		exit_code |= 2;
+		return;
+	}
+	tracef(2,"Examining dir %s\n",directory.c_str());
+
+	while ( (rc = dir.read(path,"*",Dir::Any)) == 0 ) {
+		rc = ::stat(path.c_str(),&sbuf);
+		if ( rc != 0 ) {
+			if ( errno == ENOENT ) {
+				::lstat(path.c_str(),&sbuf);
+				if ( S_ISLNK(sbuf.st_mode) ) {
+					fprintf(stderr,"Ignoring symlink %s\n",path.c_str());
+					continue;
+				}
+			}
+
+			fprintf(stderr,"%s: stat(2) on '%s'\n",strerror(errno),path.c_str());
+			continue;
+		}
+
+		if ( S_ISREG(sbuf.st_mode) ) {
+			fileno = files->add(path.c_str());
+			tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
+		} else if ( S_ISDIR(sbuf.st_mode) ) {
+			dive(path,thno);
+		} else	{
+			tracef(2,"Ignoring %s\n",path.c_str());
+		}
+	}
+	dir.close();
+
+	if ( rc != ENOENT ) {
+		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),path.c_str());
+		exit_code |= 2;
+	}
+}
+
+static void
+thread_dive(const std::string directory,Files *files) {
 	Dir dir;
 	std::string path;
 	struct stat sbuf;
@@ -63,12 +118,19 @@ dive(const std::string directory) {
 		}
 
 		if ( S_ISREG(sbuf.st_mode) ) {
-			fileno = files.add(path.c_str());
-			tracef(2,"%ld: file %s\n",long(fileno),path.c_str());
+			fileno = files->add(path.c_str());
+			tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
 		} else if ( S_ISDIR(sbuf.st_mode) ) {
-			dive(path);
+			if ( thvec.size() < 32 ) {
+				tracef(1,"New thread %u for dir %s\n",unsigned(thvec.size()),path.c_str());
+				filevec.push_back(new Files);
+				thvec.emplace_back(std::thread(dive,path,filevec.size()-1));
+			} else	{
+				tracef(1,"Dive dir %s\n",path.c_str());
+				dive(path,0);
+			}
 		} else	{
-			tracef(1,"Ignoring %s\n",path.c_str());
+			tracef(2,"Ignoring %s\n",path.c_str());
 		}
 	}
 	dir.close();
@@ -148,8 +210,36 @@ main(int argc,char **argv) {
 			exit(1);
 	}
 
-	for ( auto& dir : opt_rootvec )
-		dive(dir);
+	if ( opt_rootvec.size() == 1 ) {
+		files = new Files;
+		std::thread thmain(thread_dive,opt_rootvec.front(),files);
+
+		thmain.join();
+	} else if ( opt_rootvec.size() > 1 ) {
+		for ( auto& dir : opt_rootvec ) {
+			tracef(1,"Thread %u for %s\n",unsigned(filevec.size()),dir.c_str());
+			filevec.push_back(new Files);
+			thvec.emplace_back(std::thread(dive,dir,filevec.size()-1));
+		}
+	}
+
+	unsigned thno = 0, fx = 0;
+
+	for ( auto& thentry : thvec ) {
+		thentry.join();
+		tracef(1,"Joined thread %u\n",thno++);
+	}
+	thvec.clear();
+
+	if ( !files ) {
+		files = filevec.front();	// Use first as map master
+		fx = 1;				// Merge filesvec[1+]
+	} else	fx = 0;				// Merge filesvec[0+] with files
+
+	for ( ; fx < filevec.size(); ++fx ) {
+		files->merge(*filevec[fx]);
+		delete filevec[fx];
+	}
 
 	return exit_code;
 }

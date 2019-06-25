@@ -49,6 +49,7 @@ class Files {
 
 public:	Files() {};
 	Fileno_t add(const char *path);
+	void merge(const Files& other);
 	s_file_ent& lookup(dev_t dev,ino_t ino);
 	s_file_ent& lookup(Fileno_t fileno);
 };

@@ -15,6 +15,8 @@ install: all
 OBJS	= system.o dir.o deduper.o
 XOBJS	= system.x1o dir.o
 
+LDFLAGS = -lpthread
+
 deduper: $(OBJS)
 	$(CXX) -o deduper $(OBJS) $(LDFLAGS)
 
