@@ -1,8 +1,6 @@
 # Makefile for deduper
 ######################################################################
 
-include Makefile.incl
-
 LDFLAGS		= -L/usr/local/lib
 #		  -Wl,-R$(PREFIX)/lib
 
@@ -30,6 +28,8 @@ clean:
 clobber: clean
 	@rm -f .errs.t
 	rm -f $(TARGETS)
+
+include Makefile.incl
 
 ######################################################################
 #  Dependencies
