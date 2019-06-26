@@ -17,8 +17,12 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <list>
+#include <string>
 
 typedef uint64_t Fileno_t;
+typedef uint64_t Name_t;
+typedef std::basic_string<Name_t> NameStr_t;
 
 struct s_file_ent {
 	Fileno_t	fileno;		// Internal file number
@@ -29,8 +33,9 @@ struct s_file_ent {
 	timespec	st_mtimespec;	// Time of last modification
 };
 
+template<typename T>
 class Uid {
-	uint64_t	next_uid;
+	T		next_uid;
 
 public:	Uid() : next_uid(1) {};
 	uint64_t allocate() {
@@ -38,20 +43,30 @@ public:	Uid() : next_uid(1) {};
 	}
 };
 
-extern Uid uid_pool;
+extern Uid<Fileno_t>	uid_pool;
+extern Uid<Name_t>	name_pool;
 
 class Files {
-	std::unordered_map<Fileno_t,s_file_ent> fmap;
+	std::unordered_map<Name_t,std::string>		rev_names;
+	std::unordered_map<std::string,Name_t>		names;
+	std::unordered_map<NameStr_t,Fileno_t>		paths;
+	std::unordered_map<Fileno_t,s_file_ent> 	fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
 	std::unordered_map<off_t,std::unordered_set<Fileno_t>> by_size;
 
-	Fileno_t add(struct stat& sinfo);
+	NameStr_t add_names(std::list<std::string>& list_path);
 
 public:	Files() {};
 	Fileno_t add(const char *path);
 	void merge(const Files& other);
 	s_file_ent& lookup(dev_t dev,ino_t ino);
 	s_file_ent& lookup(Fileno_t fileno);
+
+	size_t size() { return fmap.size(); }
+	size_t size_names() { return names.size(); }
+
+	static std::string abspath(const char *filename);
+	static std::list<std::string> pathparse(const char *pathname);
 };
 
 void vtracef(int level,const char *format,va_list ap);

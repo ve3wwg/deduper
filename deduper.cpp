@@ -19,6 +19,7 @@
 
 #include <thread>
 #include <vector>
+#include <set>
 
 static const char *version = "0.1";
 
@@ -27,7 +28,8 @@ int opt_version = 0;
 std::vector<std::string> opt_rootvec;
 int exit_code = 0;
 
-Uid uid_pool;
+Uid<Fileno_t> uid_pool;
+Uid<Name_t> name_pool;
 
 static Files *files = nullptr;
 std::vector<Files*> filevec;
@@ -177,13 +179,20 @@ main(int argc,char **argv) {
 		exit(0);
 	}
 
-	if ( optind < argc ) {
-		while ( optind < argc )
-			opt_rootvec.push_back(argv[optind++]);
-	}
+	{
+		std::set<std::string> file_set;
 
-	if ( opt_rootvec.empty() )
-		opt_rootvec.push_back(".");
+		if ( optind < argc ) {
+			while ( optind < argc )
+				file_set.insert(Files::abspath(argv[optind++]));
+		}
+
+		if ( file_set.empty() )
+			file_set.insert(Files::abspath("."));
+
+		for ( auto& file : file_set )
+			opt_rootvec.push_back(file);
+	}
 
 	if ( opt_verbose > 0 ) {
 		printf("Processing the following directories:\n");
@@ -240,6 +249,10 @@ main(int argc,char **argv) {
 		files->merge(*filevec[fx]);
 		delete filevec[fx];
 	}
+
+	tracef(1,"%ld files registered, + %ld name ids\n",
+		long(files->size()),
+		long(files->size_names()));
 
 	return exit_code;
 }

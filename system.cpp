@@ -7,25 +7,71 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <limits.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
 
+#include <sstream>
+
 #include "system.hpp"
 #include "dir.hpp"
 
-Fileno_t
-Files::add(const char *path) {
-	struct stat sbuf;
-	int rc;
+std::string
+Files::abspath(const char *filename) {
+	char buf[PATH_MAX+1];
 
-	rc = stat(path,&sbuf);
-	assert(!rc);
-	return add(sbuf);
+	realpath(filename,buf);
+	return buf;
+}
+
+std::list<std::string>
+Files::pathparse(const char *pathname) {
+	std::list<std::string> list;
+	char buf[strlen(pathname)+1];
+	char *ep;
+
+	strncpy(buf,pathname,sizeof buf);
+	buf[sizeof buf-1] = 0;
+
+	for ( char *cp = buf; cp && *cp; cp = ep + 1 ) {
+		if ( (ep = strchr(cp,'/')) != nullptr )
+			*ep = 0;
+		list.push_back(cp);		
+		if ( !ep )
+			return list;
+	}
+	return list;
+}
+
+NameStr_t
+Files::add_names(std::list<std::string>& list_path) {
+	NameStr_t names_path;
+	Name_t id;
+
+	for ( auto& component : list_path ) {
+		auto it = names.find(component);
+
+		if ( it == names.end() ) {
+			id = name_pool.allocate();
+			names.insert(std::pair<std::string,Name_t>(component,id));
+			rev_names.insert(std::pair<Name_t,std::string>(id,component));
+		} else	id = it->second;
+		names_path += id;
+	}
+	return names_path;
 }
 
 Fileno_t
-Files::add(struct stat& sinfo) {
+Files::add(const char *path) {
+	struct stat sinfo;
+	std::list<std::string> list = Files::pathparse(Files::abspath(path).c_str());
+	int rc;
+
+	Files::add_names(list);
+
+	rc = stat(path,&sinfo);
+	assert(!rc);
 
 	// Make sure there is no duplicate
 	auto it = rmap.find(sinfo.st_dev);
@@ -128,33 +174,35 @@ dive(const char *dirpath) {
 	}
 
 	while ( (rc = dir.read(path,"*",Dir::Any)) == 0 ) {
-		rc = ::stat(path.c_str(),&sbuf);
+		std::string full_path = Files::abspath(path);
+
+		rc = ::stat(full_path.c_str(),&sbuf);
 		if ( rc != 0 ) {
 			if ( errno == ENOENT ) {
-				::lstat(path.c_str(),&sbuf);
+				::lstat(full_path.c_str(),&sbuf);
 				if ( S_ISLNK(sbuf.st_mode) ) {
-					fprintf(stderr,"Ignoring symlink %s\n",path.c_str());
+					fprintf(stderr,"Ignoring symlink %s\n",full_path.c_str());
 					continue;
 				}
 			}
 
-			fprintf(stderr,"%s: stat(2) on '%s'\n",strerror(errno),path.c_str());
+			fprintf(stderr,"%s: stat(2) on '%s'\n",strerror(errno),full_path.c_str());
 			continue;
 		}
 
 		if ( S_ISREG(sbuf.st_mode) ) {
-			fileno = files.add(path.c_str());
-			printf("%ld: file %s\n",long(fileno),path.c_str());
+			fileno = files.add(full_path.c_str());
+			printf("%ld: file %s\n",long(fileno),full_path.c_str());
 		} else if ( S_ISDIR(sbuf.st_mode) ) {
-			dive(path.c_str());
+			dive(full_path.c_str());
 		} else	{
-			fprintf(stderr,"Ignoring %s\n",path.c_str());
+			fprintf(stderr,"Ignoring %s\n",full_path.c_str());
 		}
 	}
 	dir.close();
 
 	if ( rc != ENOENT )
-		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),path.c_str());
+		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),full_path.c_str());
 }
 
 int
