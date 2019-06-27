@@ -31,6 +31,7 @@ struct s_file_ent {
 	off_t		st_size;	// File size in bytes
 	nlink_t		st_nlink;	// # of hard links
 	timespec	st_mtimespec;	// Time of last modification
+	NameStr_t	path;		// Path to the file
 };
 
 template<typename T>
@@ -49,7 +50,6 @@ extern Uid<Name_t>	name_pool;
 class Files {
 	std::unordered_map<Name_t,std::string>		rev_names;
 	std::unordered_map<std::string,Name_t>		names;
-	std::unordered_map<NameStr_t,Fileno_t>		paths;
 	std::unordered_map<Fileno_t,s_file_ent> 	fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
 	std::unordered_map<off_t,std::unordered_set<Fileno_t>> by_size;

@@ -68,8 +68,6 @@ Files::add(const char *path) {
 	std::list<std::string> list = Files::pathparse(Files::abspath(path).c_str());
 	int rc;
 
-	Files::add_names(list);
-
 	rc = stat(path,&sinfo);
 	assert(!rc);
 
@@ -94,6 +92,8 @@ Files::add(const char *path) {
 	fent.st_mtimespec.tv_sec = sinfo.st_mtime;
 	fent.st_mtimespec.tv_nsec = 0;
 #endif
+	fent.path = Files::add_names(list);
+
 	// Track files by size
 	by_size[fent.st_size].insert(fileno);
 	return fileno;
@@ -102,6 +102,13 @@ Files::add(const char *path) {
 void
 Files::merge(const Files& other) {
 	
+	for ( auto& pair : other.names ) {
+		auto it = names.find(pair.first);
+		if ( it != names.end() ) {
+			names.insert(pair);
+			rev_names.insert(std::pair<Name_t,std::string>(pair.second,pair.first));
+		}
+	}
 	for ( const auto& pair : other.fmap ) {
 		const Fileno_t fileno = pair.first;
 		const s_file_ent& fent = pair.second;
