@@ -12,6 +12,8 @@
 
 #include "dir.hpp"
 
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #ifndef NAME_MAX
 # ifdef _DARWIN_FEATURE_64_BIT_INODE
 #  define NAME_MAX	1023
