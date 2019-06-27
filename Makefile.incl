@@ -9,8 +9,8 @@ STD		?= c++17
 
 .SUFFIXES:	.x1o
 
-CXX 		= g++
-CC		= gcc
+CXX 		?= g++
+CC		?= gcc
 INCL		= -I/usr/local/include -I$(TOPDIR)/include
 
 CXXFLAGS	= -std=$(STD) -Wall -Wno-deprecated -fpermissive $(INCL) -fstrict-aliasing
