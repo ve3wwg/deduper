@@ -136,6 +136,19 @@ Files::lookup(Fileno_t fileno) {
 	return it->second;
 }
 
+std::unordered_map<off_t,std::unordered_set<Fileno_t>>
+Files::dup_candidates() {
+	std::unordered_map<off_t,std::unordered_set<Fileno_t>> candidates;
+
+	for ( auto& pair : by_size ) {
+		auto& uset = pair.second;
+
+		if ( uset.size() > 1 )
+			candidates.insert(pair);
+	}
+	return candidates;
+}
+
 void
 vtracef(int level,const char *format,va_list ap) {
 	extern int opt_verbose;
@@ -158,88 +171,5 @@ tracef(int level,const char *format,...) {
 	vprintf(format,ap);
 	va_end(ap);
 }
-
-#if UNIT_TEST
-
-Uid uid_pool;
-Files files;
-
-static void
-dive(const char *dirpath) {
-	Dir dir;
-	std::string path;
-	struct stat sbuf;
-	Fileno_t fileno;
-	int rc;
-
-	rc = dir.open(dirpath);
-	if ( rc ) {
-		fprintf(stderr,"%s: opening directory %s",
-			strerror(rc),
-			dirpath);
-		return;
-	}
-
-	while ( (rc = dir.read(path,"*",Dir::Any)) == 0 ) {
-		std::string full_path = Files::abspath(path);
-
-		rc = ::stat(full_path.c_str(),&sbuf);
-		if ( rc != 0 ) {
-			if ( errno == ENOENT ) {
-				::lstat(full_path.c_str(),&sbuf);
-				if ( S_ISLNK(sbuf.st_mode) ) {
-					fprintf(stderr,"Ignoring symlink %s\n",full_path.c_str());
-					continue;
-				}
-			}
-
-			fprintf(stderr,"%s: stat(2) on '%s'\n",strerror(errno),full_path.c_str());
-			continue;
-		}
-
-		if ( S_ISREG(sbuf.st_mode) ) {
-			fileno = files.add(full_path.c_str());
-			printf("%ld: file %s\n",long(fileno),full_path.c_str());
-		} else if ( S_ISDIR(sbuf.st_mode) ) {
-			dive(full_path.c_str());
-		} else	{
-			fprintf(stderr,"Ignoring %s\n",full_path.c_str());
-		}
-	}
-	dir.close();
-
-	if ( rc != ENOENT )
-		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),full_path.c_str());
-}
-
-int
-main(int argc,char **argv) {
-
-	if ( !argv[1] ) {
-		dive(".");
-	} else	{
-		for ( int x=1; x<argc; ++x )
-			dive(argv[x]);
-	}
-
-#if 0
-	for ( auto& pair0 : files.rmap ) {
-		const dev_t device = pair0.first;
-		const std::unordered_map<ino_t,Fileno_t>& inomap = pair0.second;
-
-		for ( auto& pair1 : inomap ) {
-			const ino_t inode = pair1.first;
-			const Fileno_t fileno = pair1.second;
-
-			
-
-		}
-	}
-#endif
-
-	return 0;
-}
-
-#endif
 
 // End system.cpp

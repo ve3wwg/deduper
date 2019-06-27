@@ -257,6 +257,10 @@ main(int argc,char **argv) {
 		long(files->size()),
 		long(files->size_names()));
 
+	auto candidates = files->dup_candidates();
+
+	tracef(1,"There are %ld duplicate candidates\n",long(candidates.size()));
+
 	return exit_code;
 }
 

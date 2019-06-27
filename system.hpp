@@ -61,6 +61,7 @@ public:	Files() {};
 	void merge(const Files& other);
 	s_file_ent& lookup(dev_t dev,ino_t ino);
 	s_file_ent& lookup(Fileno_t fileno);
+	std::unordered_map<off_t,std::unordered_set<Fileno_t>> dup_candidates();
 
 	size_t size() { return fmap.size(); }
 	size_t size_names() { return names.size(); }
