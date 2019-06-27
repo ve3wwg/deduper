@@ -26,7 +26,7 @@ test_system: $(XOBJS)
 system.x1o: system.hpp
 
 clean:	
-	rm -f *.o *.x1o a.out
+	rm -f *.o *.x1o a.out core core.*
 
 clobber: clean
 	@rm -f .errs.t
