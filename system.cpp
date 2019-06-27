@@ -17,6 +17,35 @@
 #include "system.hpp"
 #include "dir.hpp"
 
+extern Names names_pool;
+
+Name_t
+Names::name_register(const char *name) {
+	const std::string find_name(name);
+	std::lock_guard<std::mutex> lock(mutex);
+
+	auto it = names.find(find_name);
+	if ( it == names.end() ) {
+		Name_t id = allocate();
+		names.insert(std::pair<std::string,Name_t>(find_name,id));
+		auto i2 = names.find(find_name);
+		rev_names.insert(std::pair<Name_t,const char *>(id,i2->first.c_str()));
+		return id;
+	} else	{
+		return it->second;
+	}
+}
+
+std::string
+Names::lookup(Name_t name_id) {
+	std::lock_guard<std::mutex> lock(mutex);
+
+	auto it = rev_names.find(name_id);
+	if ( it != rev_names.end() )
+		return std::string(it->second);
+	return "";
+}
+
 std::string
 Files::abspath(const char *filename) {
 	char buf[PATH_MAX+1];
@@ -37,6 +66,8 @@ Files::pathparse(const char *pathname) {
 	for ( char *cp = buf; cp && *cp; cp = ep + 1 ) {
 		if ( (ep = strchr(cp,'/')) != nullptr )
 			*ep = 0;
+		if ( !*cp )
+			continue;
 		list.push_back(cp);		
 		if ( !ep )
 			return list;
@@ -50,13 +81,7 @@ Files::add_names(std::list<std::string>& list_path) {
 	Name_t id;
 
 	for ( auto& component : list_path ) {
-		auto it = names.find(component);
-
-		if ( it == names.end() ) {
-			id = name_pool.allocate();
-			names.insert(std::pair<std::string,Name_t>(component,id));
-			rev_names.insert(std::pair<Name_t,std::string>(id,component));
-		} else	id = it->second;
+		id = name_pool.name_register(component.c_str());
 		names_path += id;
 	}
 	return names_path;
@@ -102,13 +127,6 @@ Files::add(const char *path) {
 void
 Files::merge(const Files& other) {
 	
-	for ( auto& pair : other.names ) {
-		auto it = names.find(pair.first);
-		if ( it != names.end() ) {
-			names.insert(pair);
-			rev_names.insert(std::pair<Name_t,std::string>(pair.second,pair.first));
-		}
-	}
 	for ( const auto& pair : other.fmap ) {
 		const Fileno_t fileno = pair.first;
 		const s_file_ent& fent = pair.second;
@@ -150,16 +168,16 @@ Files::dup_candidates() {
 }
 
 std::string
-Files::pathname(const NameStr_t& path) {
+Files::namestr_pathname(const NameStr_t& path) {
 	std::stringstream ss;
 
 	for ( auto name_id : path ) {
-		auto it = rev_names.find(name_id);
-		assert(it != rev_names.end());
-
-		ss << '/' << it->second;
+		const std::string& sname = name_pool.lookup(name_id);
+		assert(!sname.empty());
+		ss << '/' << sname;
 	}
-	return ss.str();
+	std::string r(ss.str());
+	return r;
 }
 
 std::string
@@ -170,7 +188,7 @@ Files::pathname(Fileno_t file) {
 		return "";
 	const auto& fent = it->second;
 
-	return this->pathname(fent.path);
+	return namestr_pathname(fent.path);
 }
 
 void
