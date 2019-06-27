@@ -149,6 +149,30 @@ Files::dup_candidates() {
 	return candidates;
 }
 
+std::string
+Files::pathname(const NameStr_t& path) {
+	std::stringstream ss;
+
+	for ( auto name_id : path ) {
+		auto it = rev_names.find(name_id);
+		assert(it != rev_names.end());
+
+		ss << '/' << it->second;
+	}
+	return ss.str();
+}
+
+std::string
+Files::pathname(Fileno_t file) {
+
+	auto it = fmap.find(file);
+	if ( it == fmap.end() )
+		return "";
+	const auto& fent = it->second;
+
+	return this->pathname(fent.path);
+}
+
 void
 vtracef(int level,const char *format,va_list ap) {
 	extern int opt_verbose;

@@ -65,9 +65,12 @@ public:	Files() {};
 
 	size_t size() { return fmap.size(); }
 	size_t size_names() { return names.size(); }
+	std::string pathname(const NameStr_t& path);
+	std::string pathname(Fileno_t file);
 
 	static std::string abspath(const char *filename);
 	static std::list<std::string> pathparse(const char *pathname);
+	static void crc32(uint32_t& crc32,const void *buf,size_t buflen);
 };
 
 void vtracef(int level,const char *format,va_list ap);

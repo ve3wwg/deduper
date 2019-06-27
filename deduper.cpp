@@ -261,6 +261,23 @@ main(int argc,char **argv) {
 
 	tracef(1,"There are %ld duplicate candidates\n",long(candidates.size()));
 
+	typedef uint32_t crc32_t;
+
+	std::unordered_map<crc32_t,std::unordered_set<Fileno_t>> candidates_crc32;
+
+	for ( auto& pair : candidates ) {
+		const off_t size = pair.first;
+		const auto& fileset = pair.second;
+
+		printf("SIZE: %ld bytes\n",long(size));
+
+		for ( auto fileno: fileset ) {
+			const std::string path(files->pathname(fileno));
+
+			printf("  path %s\n",path.c_str());
+		}
+	}
+
 	return exit_code;
 }
 
