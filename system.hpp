@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <list>
@@ -44,12 +45,21 @@ public:	Uid() : next_uid(1) {};
 	}
 };
 
+class Names : Uid<Name_t> {
+	std::mutex				mutex;
+	std::unordered_map<std::string,Name_t>	names;
+	std::unordered_map<Name_t,const char *>	rev_names;
+
+public:	Names() {}
+	Name_t name_register(const char *name);
+	std::string lookup(Name_t name_id);
+	size_t size() { return names.size(); }
+};
+
 extern Uid<Fileno_t>	uid_pool;
-extern Uid<Name_t>	name_pool;
+extern Names		name_pool;
 
 class Files {
-	std::unordered_map<Name_t,std::string>		rev_names;
-	std::unordered_map<std::string,Name_t>		names;
 	std::unordered_map<Fileno_t,s_file_ent> 	fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
 	std::unordered_map<off_t,std::unordered_set<Fileno_t>> by_size;
@@ -64,8 +74,7 @@ public:	Files() {};
 	std::unordered_map<off_t,std::unordered_set<Fileno_t>> dup_candidates();
 
 	size_t size() { return fmap.size(); }
-	size_t size_names() { return names.size(); }
-	std::string pathname(const NameStr_t& path);
+	std::string namestr_pathname(const NameStr_t& path);
 	std::string pathname(Fileno_t file);
 
 	static std::string abspath(const char *filename);
