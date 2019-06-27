@@ -12,7 +12,7 @@ all:	Makefile.deps $(TARGETS)
 
 install: all
 
-OBJS	= system.o dir.o deduper.o
+OBJS	= system.o crc32.o dir.o deduper.o
 XOBJS	= system.x1o dir.o
 
 LDFLAGS = -lpthread
