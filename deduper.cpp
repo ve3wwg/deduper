@@ -245,9 +245,12 @@ main(int argc,char **argv) {
 		fx = 1;				// Merge filesvec[1+]
 	} else	fx = 0;				// Merge filesvec[0+] with files
 
-	for ( ; fx < filevec.size(); ++fx ) {
-		files->merge(*filevec[fx]);
-		delete filevec[fx];
+	if ( !filevec.empty() ) {
+		tracef(1,"Merging %ld maps..\n",long(filevec.size()));
+		for ( ; fx < filevec.size(); ++fx ) {
+			files->merge(*filevec[fx]);
+			delete filevec[fx];
+		}
 	}
 
 	tracef(1,"%ld files registered, + %ld name ids\n",
