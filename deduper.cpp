@@ -29,7 +29,7 @@ std::vector<std::string> opt_rootvec;
 int exit_code = 0;
 
 Uid<Fileno_t> uid_pool;
-Uid<Name_t> name_pool;
+Names name_pool;
 
 static Files *files = nullptr;
 std::vector<Files*> filevec;
@@ -255,7 +255,7 @@ main(int argc,char **argv) {
 
 	tracef(1,"%ld files registered, + %ld name ids\n",
 		long(files->size()),
-		long(files->size_names()));
+		long(name_pool.size()));
 
 	auto candidates = files->dup_candidates();
 
