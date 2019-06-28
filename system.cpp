@@ -199,6 +199,7 @@ vtracef(int level,const char *format,va_list ap) {
 		return;
 
 	vprintf(format,ap);
+	fflush(stdout);
 }
 
 void
@@ -212,6 +213,7 @@ tracef(int level,const char *format,...) {
 	va_start(ap,format);
 	vprintf(format,ap);
 	va_end(ap);
+	fflush(stdout);
 }
 
 // End system.cpp
