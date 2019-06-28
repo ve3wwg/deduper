@@ -24,9 +24,11 @@
 static const char *version = "0.1";
 
 int opt_verbose = 0;
-int opt_version = 0;
 std::vector<std::string> opt_rootvec;
 int exit_code = 0;
+static int opt_version = 0;
+static int opt_help = 0;
+static int opt_threads = 0;
 
 Uid<Fileno_t> uid_pool;
 Names name_pool;
@@ -143,6 +145,22 @@ thread_dive(const std::string directory,Files *files) {
 	}
 }
 
+static void
+usage(const char *argv0) {
+	char cmd[strlen(argv0)+1];
+	char *cp = strrchr(cmd,'/');
+
+	if ( cp )
+		argv0 = cp+1;
+	printf("Usage: %s [options] directories..\n\n"
+		"\t-h, --help\tHelp info.\n"
+		"\t-v, --verbose\n"
+		"\t--version\n"
+		"\t--threads n\tDefaults to 4\n",
+		argv0);
+	exit(0);
+}
+
 int
 main(int argc,char **argv) {
 	extern char *optarg;
@@ -150,24 +168,32 @@ main(int argc,char **argv) {
 	static struct option long_options[] = {
 		{"verbose",  	no_argument,		nullptr,	'v' },	// 0
 		{"version",	no_argument,		&opt_version,	1 },	// 1
+		{"threads",	required_argument,	nullptr,	2 },	// 2
+		{"help",	no_argument,		&opt_help,	'h' },	// 3
 		{0,         	0,             		nullptr,	0 },	// End
 	};
 	int option_index = 0;
 	int ch;
 	
 	for (;;) {
-		ch = getopt_long(argc,argv,"vVr:",long_options,&option_index);
+		ch = getopt_long(argc,argv,"vVr:h",long_options,&option_index);
 		if ( ch == -1 )
 			break;
 	
 		switch (ch) {
-		case 0:
+		case 0:			// -v, --verbose
 		case 'v':
 			++opt_verbose;
 			break;
-		case 1:
+		case 1:			// --version
 		case 'V':
 			break;		
+		case 2:			// --threads
+			opt_threads = atoi(optarg);
+			break;
+		case 'h':
+			opt_help = 1;
+			break;
 		default:
 			printf("Unknown option: -%c\n",ch);
 			exit(1);
@@ -178,6 +204,12 @@ main(int argc,char **argv) {
 		printf("Version: %s\n",version);
 		exit(0);
 	}
+
+	if ( opt_threads <= 0 )
+		opt_threads = 4;
+
+	if ( opt_help )
+		usage(argv[0]);
 
 	{
 		std::set<std::string> file_set;
