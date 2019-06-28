@@ -221,7 +221,7 @@ main(int argc,char **argv) {
 	// Start worker threads
 	//////////////////////////////////////////////////////////////
 
-	for ( unsigned thx=0; thx<opt_threads; ++thx ) {
+	for ( int thx=0; thx<opt_threads; ++thx ) {
 		filevec.push_back(new Files);
 		thvec.emplace_back(std::thread(dive,filevec.back()));
 	}
@@ -282,7 +282,7 @@ main(int argc,char **argv) {
 				rc = ::read(fd,buf,sizeof buf);
 			} while ( rc == -1 && errno == EINTR );
 
-			if ( rc != sizeof buf ) {
+			if ( rc != int(sizeof buf) ) {
 				ok = false;
 				::close(fd);
 				return 0;
