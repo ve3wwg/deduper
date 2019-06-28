@@ -54,6 +54,7 @@ dive_dir(const std::string& directory,Files *files) {
 		fprintf(stderr,"%s: opening directory %s\n",
 			strerror(rc),
 			directory.c_str());
+		--dive_depth;
 		exit_code |= 2;
 		return;
 	}
