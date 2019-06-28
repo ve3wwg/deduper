@@ -291,6 +291,7 @@ main(int argc,char **argv) {
 			::close(fd);
 
 			uint32_t crc = 0;
+
 			Files::crc32(crc,buf,sizeof buf);
 			fent.crc32 = crc;
 			ok = true;
@@ -318,7 +319,7 @@ main(int argc,char **argv) {
 			bool ok;
 
 			while ( inq.pop(qent) ) {
-				crc32(qent.fileno,qent.size,ok);
+				crc32(qent.fileno,qent.size>1024?1024:qent.size,ok);
 			}
 		};
 
