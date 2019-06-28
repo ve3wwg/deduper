@@ -21,6 +21,7 @@
 #include <list>
 #include <string>
 #include <atomic>
+#include <queue>
 
 typedef uint64_t Fileno_t;
 typedef uint64_t Name_t;
@@ -55,6 +56,27 @@ public:	Names() {}
 	Name_t name_register(const char *name);
 	std::string lookup(Name_t name_id);
 	size_t size() { return names.size(); }
+};
+
+class Queue : public std::queue<std::string> {
+	std::mutex	mutex;
+
+public:	Queue() {}
+	void push(const std::string& s) {
+		std::lock_guard<std::mutex> lock(mutex);
+		std::queue<std::string>::push(s);
+	}
+	bool pop(std::string& s) {
+		std::lock_guard<std::mutex> lock(mutex);
+
+		if ( empty() ) {
+			s.clear();
+			return false;
+		}
+		s = std::queue<std::string>::front();
+		std::queue<std::string>::pop();
+		return true;
+	}
 };
 
 extern Uid<Fileno_t>	uid_pool;

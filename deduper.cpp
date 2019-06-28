@@ -34,12 +34,14 @@ Uid<Fileno_t> uid_pool;
 Names name_pool;
 
 static Files *files = nullptr;
+static Queue dir_queue;
+
 std::vector<Files*> filevec;
 std::vector<std::thread> thvec;
+std::atomic<time_t> dive_depth(0);
 
 static void
-dive(const std::string directory,unsigned thno) {
-	Files *files = filevec[thno];
+dive_dir(const std::string& directory,Files *files) {
 	Dir dir;
 	std::string path;
 	struct stat sbuf;
@@ -75,7 +77,8 @@ dive(const std::string directory,unsigned thno) {
 			fileno = files->add(path.c_str());
 			tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
 		} else if ( S_ISDIR(sbuf.st_mode) ) {
-			dive(path,thno);
+			++dive_depth;
+			dir_queue.push(path);
 		} else	{
 			tracef(2,"Ignoring %s\n",path.c_str());
 		}
@@ -86,62 +89,21 @@ dive(const std::string directory,unsigned thno) {
 		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),path.c_str());
 		exit_code |= 2;
 	}
+	--dive_depth;
 }
 
 static void
-thread_dive(const std::string directory,Files *files) {
-	Dir dir;
-	std::string path;
-	struct stat sbuf;
-	Fileno_t fileno;
-	int rc;
+dive(Files *files) {
+	std::string dir;
 
-	rc = dir.open(directory.c_str());
-	if ( rc ) {
-		fprintf(stderr,"%s: opening directory %s\n",
-			strerror(rc),
-			directory.c_str());
-		exit_code |= 2;
-		return;
-	}
-	tracef(1,"Examining dir %s\n",directory.c_str());
-
-	while ( (rc = dir.read(path,"*",Dir::Any)) == 0 ) {
-		rc = ::stat(path.c_str(),&sbuf);
-		if ( rc != 0 ) {
-			if ( errno == ENOENT ) {
-				::lstat(path.c_str(),&sbuf);
-				if ( S_ISLNK(sbuf.st_mode) ) {
-					fprintf(stderr,"Ignoring symlink %s\n",path.c_str());
-					continue;
-				}
-			}
-
-			fprintf(stderr,"%s: stat(2) on '%s'\n",strerror(errno),path.c_str());
+	for (;;) {
+		if ( !dir_queue.pop(dir) ) {
+			if ( !dive_depth.load() )
+				break;
+			usleep(1000);
 			continue;
 		}
-
-		if ( S_ISREG(sbuf.st_mode) ) {
-			fileno = files->add(path.c_str());
-			tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
-		} else if ( S_ISDIR(sbuf.st_mode) ) {
-			if ( thvec.size() < 32 ) {
-				tracef(1,"New thread %u for dir %s\n",unsigned(thvec.size()),path.c_str());
-				filevec.push_back(new Files);
-				thvec.emplace_back(std::thread(dive,path,filevec.size()-1));
-			} else	{
-				tracef(1,"Dive dir %s\n",path.c_str());
-				dive(path,0);
-			}
-		} else	{
-			tracef(2,"Ignoring %s\n",path.c_str());
-		}
-	}
-	dir.close();
-
-	if ( rc != ENOENT ) {
-		fprintf(stderr,"%s: Reading directory %s\n",strerror(rc),path.c_str());
-		exit_code |= 2;
+		dive_dir(dir,files);
 	}
 }
 
@@ -246,44 +208,40 @@ main(int argc,char **argv) {
 				fprintf(stderr,"Not a directory: %s\n",dir.c_str());
 				fail = true;
 			}
+			dir_queue.push(dir);
 		}
 		if ( fail )
 			exit(1);
 	}
 
-	if ( opt_rootvec.size() == 1 ) {
-		files = new Files;
-		std::thread thmain(thread_dive,opt_rootvec.front(),files);
+	dive_depth.store(dir_queue.size());
 
-		thmain.join();
-	} else if ( opt_rootvec.size() > 1 ) {
-		for ( auto& dir : opt_rootvec ) {
-			tracef(1,"Thread %u for %s\n",unsigned(filevec.size()),dir.c_str());
-			filevec.push_back(new Files);
-			thvec.emplace_back(std::thread(dive,dir,filevec.size()-1));
-		}
+	//////////////////////////////////////////////////////////////
+	// Start worker threads
+	//////////////////////////////////////////////////////////////
+
+	for ( unsigned thx=0; thx<opt_threads; ++thx ) {
+		filevec.push_back(new Files);
+		thvec.emplace_back(std::thread(dive,filevec.back()));
 	}
 
-	unsigned thno = 0, fx = 0;
-
-	for ( auto& thentry : thvec ) {
-		thentry.join();
-		tracef(1,"Joined thread %u\n",thno++);
-	}
+	for ( auto& thread : thvec )
+		thread.join();
 	thvec.clear();
 
-	if ( !files ) {
-		files = filevec.front();	// Use first as map master
-		fx = 1;				// Merge filesvec[1+]
-	} else	fx = 0;				// Merge filesvec[0+] with files
+	//////////////////////////////////////////////////////////////
+	// Merge file info
+	//////////////////////////////////////////////////////////////
 
-	if ( !filevec.empty() ) {
-		tracef(1,"Merging %ld maps..\n",long(filevec.size()));
-		for ( ; fx < filevec.size(); ++fx ) {
-			files->merge(*filevec[fx]);
-			delete filevec[fx];
-		}
+	tracef(1,"Merging %ld maps..\n",long(filevec.size()));
+
+	files = filevec.front();
+
+	for ( unsigned fx=1; fx < filevec.size(); ++fx ) {
+		files->merge(*filevec[fx]);
+		delete filevec[fx];
 	}
+	filevec.clear();
 
 	tracef(1,"%ld files registered, + %ld name ids\n",
 		long(files->size()),
