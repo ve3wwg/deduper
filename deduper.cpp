@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <fcntl.h>
 #include <getopt.h>
 
 #include "system.hpp"
@@ -34,7 +35,7 @@ Uid<Fileno_t> uid_pool;
 Names name_pool;
 
 static Files *files = nullptr;
-static Queue dir_queue;
+static Queue<std::string> dir_queue;
 
 std::vector<Files*> filevec;
 std::vector<std::thread> thvec;
@@ -251,21 +252,105 @@ main(int argc,char **argv) {
 
 	tracef(1,"There are %ld duplicate candidates\n",long(candidates.size()));
 
-	typedef uint32_t crc32_t;
+	{
+		typedef uint32_t crc32_t;
+		std::unordered_map<crc32_t,std::unordered_set<Fileno_t>> candidates_crc32;
+		struct s_size_qent {
+			Fileno_t	fileno;
+			size_t		size;
+			
+		};
+		struct s_crc32 : public s_size_qent {
+			crc32_t		crc32;
+		};
+		Queue<s_size_qent>	inq;
 
-	std::unordered_map<crc32_t,std::unordered_set<Fileno_t>> candidates_crc32;
-
-	for ( auto& pair : candidates ) {
-		const off_t size = pair.first;
-		const auto& fileset = pair.second;
-
-		printf("SIZE: %ld bytes\n",long(size));
-
-		for ( auto fileno: fileset ) {
+		auto crc32 = [](Fileno_t fileno,size_t size,bool& ok) -> crc32_t {
+			s_file_ent& fent = files->lookup(fileno);
 			const std::string path(files->pathname(fileno));
+			char buf[size];
+			int fd = ::open(path.c_str(),O_RDONLY);
+			int rc;
 
-			printf("  path %s\n",path.c_str());
+			if ( fd == -1 ) {
+				fprintf(stderr,"%s: opening %s for CRC32\n",strerror(errno),path.c_str());
+				fent.crc32 = 0;
+				ok = false;
+				return 0;
+			}
+			do	{
+				rc = ::read(fd,buf,sizeof buf);
+			} while ( rc == -1 && errno == EINTR );
+
+			if ( rc != sizeof buf ) {
+				ok = false;
+				::close(fd);
+				return 0;
+			}
+			::close(fd);
+
+			uint32_t crc = 0;
+			Files::crc32(crc,buf,sizeof buf);
+			fent.crc32 = crc;
+			ok = true;
+			return crc;
+		};
+
+		// Queue up CRC32 work:
+		for ( auto& pair : candidates ) {
+			s_size_qent qent;
+			qent.size = pair.first;
+			const auto& fileset = pair.second;
+			crc32_t crc;
+			bool ok;
+
+			printf("SIZE: %ld bytes\n",long(qent.size));
+
+			for ( auto fileno: fileset ) {
+				qent.fileno = fileno;
+				inq.push(qent);
+			}
+		}		
+
+		auto crc32_func = [&]() {
+			s_size_qent qent;
+			bool ok;
+
+			while ( inq.pop(qent) ) {
+				crc32(qent.fileno,qent.size,ok);
+			}
+		};
+
+		thvec.clear();
+		for ( int thx=0; thx < opt_threads; ++thx ) {
+			thvec.emplace_back(std::thread(crc32_func));
 		}
+
+		for ( auto& thread : thvec )
+			thread.join();
+
+		puts("Done CRC32");
+		fflush(stdout);
+
+#if 0
+		for ( auto& pair : candidates ) {
+			const off_t size = pair.first;
+			const auto& fileset = pair.second;
+			crc32_t crc;
+			bool ok;
+
+			printf("SIZE: %ld bytes\n",long(size));
+
+			for ( auto fileno: fileset ) {
+				const std::string path(files->pathname(fileno));
+				crc = crc32(path,size,ok);
+
+				if ( ok )
+					printf("  path %s CRC32 0x%08X\n",path.c_str(),unsigned(crc));
+				else	printf("  path %s CRC32 error!\n",path.c_str());
+			}
+		}
+#endif
 	}
 
 	return exit_code;

@@ -35,6 +35,7 @@ struct s_file_ent {
 	nlink_t		st_nlink;	// # of hard links
 	timespec	st_mtimespec;	// Time of last modification
 	NameStr_t	path;		// Path to the file
+	uint32_t	crc32=0;	// CTC32 of first 1-k
 };
 
 template<typename T>
@@ -58,23 +59,22 @@ public:	Names() {}
 	size_t size() { return names.size(); }
 };
 
-class Queue : public std::queue<std::string> {
+template<typename T>
+class Queue : public std::queue<T> {
 	std::mutex	mutex;
 
 public:	Queue() {}
-	void push(const std::string& s) {
+	void push(const T& s) {
 		std::lock_guard<std::mutex> lock(mutex);
-		std::queue<std::string>::push(s);
+		std::queue<T>::push(s);
 	}
-	bool pop(std::string& s) {
+	bool pop(T& s) {
 		std::lock_guard<std::mutex> lock(mutex);
 
-		if ( empty() ) {
-			s.clear();
+		if ( this->empty() )
 			return false;
-		}
-		s = std::queue<std::string>::front();
-		std::queue<std::string>::pop();
+		s = std::queue<T>::front();
+		std::queue<T>::pop();
 		return true;
 	}
 };
