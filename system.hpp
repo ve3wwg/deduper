@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <list>
 #include <string>
+#include <atomic>
 
 typedef uint64_t Fileno_t;
 typedef uint64_t Name_t;
@@ -37,9 +38,9 @@ struct s_file_ent {
 
 template<typename T>
 class Uid {
-	T		next_uid;
+	std::atomic<T>	next_uid;
 
-public:	Uid() : next_uid(1) {};
+public:	Uid() : next_uid(1) { next_uid.store(0); }
 	uint64_t allocate() {
 		return next_uid++;
 	}
