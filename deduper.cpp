@@ -321,16 +321,17 @@ main(int argc,char **argv) {
 			}
 		};
 
-		thvec.clear();
+		std::vector<std::thread> tvec;
 		for ( int thx=0; thx < opt_threads; ++thx ) {
-			thvec.emplace_back(std::thread(crc32_func));
+			tvec.emplace_back(std::thread(crc32_func));
 		}
 
-		for ( auto& thread : thvec )
+		for ( auto& thread : tvec )
 			thread.join();
 
 		puts("Done CRC32");
 		fflush(stdout);
+		tvec.clear();
 
 #if 0
 		for ( auto& pair : candidates ) {
@@ -352,6 +353,9 @@ main(int argc,char **argv) {
 		}
 #endif
 	}
+
+	puts("Exit..");
+	fflush(stdout);
 
 	return exit_code;
 }
