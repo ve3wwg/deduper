@@ -30,6 +30,7 @@ int exit_code = 0;
 static int opt_version = 0;
 static int opt_help = 0;
 static int opt_threads = 0;
+static uint64_t opt_size = 0;
 
 Uid<Fileno_t> uid_pool;
 Names name_pool;
@@ -76,8 +77,10 @@ dive_dir(const std::string& directory,Files *files) {
 		}
 
 		if ( S_ISREG(sbuf.st_mode) ) {
-			fileno = files->add(path.c_str());
-			tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
+			if ( opt_size == 0 || opt_size <= sbuf.st_size ) {
+				fileno = files->add(path.c_str());
+				tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
+			}
 		} else if ( S_ISDIR(sbuf.st_mode) ) {
 			++dive_depth;
 			dir_queue.push(path);
@@ -120,7 +123,8 @@ usage(const char *argv0) {
 		"\t-h, --help\tHelp info.\n"
 		"\t-v, --verbose\n"
 		"\t--version\n"
-		"\t--threads n\tDefaults to 4\n",
+		"\t--threads n\tDefaults to 4\n"
+		"\t-s, --size n\tSize >= n bytes\n",
 		argv0);
 	exit(0);
 }
@@ -134,13 +138,14 @@ main(int argc,char **argv) {
 		{"version",	no_argument,		&opt_version,	1 },	// 1
 		{"threads",	required_argument,	nullptr,	2 },	// 2
 		{"help",	no_argument,		&opt_help,	'h' },	// 3
+		{"size",	required_argument,	nullptr,	4 },	// 4
 		{0,         	0,             		nullptr,	0 },	// End
 	};
 	int option_index = 0;
 	int ch;
 	
 	for (;;) {
-		ch = getopt_long(argc,argv,"vVr:h",long_options,&option_index);
+		ch = getopt_long(argc,argv,"vVr:sh",long_options,&option_index);
 		if ( ch == -1 )
 			break;
 	
@@ -157,6 +162,10 @@ main(int argc,char **argv) {
 			break;
 		case 'h':
 			opt_help = 1;
+			break;
+		case 's':
+		case 4:
+			opt_size = strtoull(optarg,nullptr,10);
 			break;
 		default:
 			printf("Unknown option: -%c\n",ch);
@@ -250,11 +259,11 @@ main(int argc,char **argv) {
 		long(name_pool.size()));
 
 	auto candidates = files->dup_candidates();
+	std::unordered_map<size_t,std::unordered_map<crc32_t,std::set<Fileno_t>>> candidates2;
 
 	tracef(1,"There are %ld duplicate candidates\n",long(candidates.size()));
 
 	{
-		typedef uint32_t crc32_t;
 		std::unordered_map<crc32_t,std::unordered_set<Fileno_t>> candidates_crc32;
 		struct s_size_qent {
 			Fileno_t	fileno;
@@ -274,6 +283,7 @@ main(int argc,char **argv) {
 			int rc;
 
 			if ( fd == -1 ) {
+				fent.error = errno;
 				fprintf(stderr,"%s: opening %s for CRC32\n",strerror(errno),path.c_str());
 				fent.crc32 = 0;
 				ok = false;
@@ -285,6 +295,7 @@ main(int argc,char **argv) {
 
 			if ( rc != int(sizeof buf) ) {
 				ok = false;
+				fent.error = errno;
 				::close(fd);
 				return 0;
 			}
@@ -294,6 +305,7 @@ main(int argc,char **argv) {
 
 			Files::crc32(crc,buf,sizeof buf);
 			fent.crc32 = crc;
+			fent.error = 0;
 			ok = true;
 			return crc;
 		};
@@ -305,8 +317,6 @@ main(int argc,char **argv) {
 			const auto& fileset = pair.second;
 			crc32_t crc;
 			bool ok;
-
-			printf("SIZE: %ld bytes\n",long(qent.size));
 
 			for ( auto fileno: fileset ) {
 				qent.fileno = fileno;
@@ -323,37 +333,84 @@ main(int argc,char **argv) {
 			}
 		};
 
+		tracef(1,"Performing first 1k CRC32 calcs on %ld files..\n",long(inq.size()));
+
 		std::vector<std::thread> tvec;
-		for ( int thx=0; thx < opt_threads; ++thx ) {
+		for ( int thx=0; thx < opt_threads; ++thx )
 			tvec.emplace_back(std::thread(crc32_func));
-		}
 
 		for ( auto& thread : tvec )
 			thread.join();
-
-		puts("Done CRC32");
-		fflush(stdout);
 		tvec.clear();
 
-#if 0
+		tracef(1,"Done CRC32 1k calcs.\n");
+		fflush(stdout);
+
 		for ( auto& pair : candidates ) {
 			const off_t size = pair.first;
 			const auto& fileset = pair.second;
 			crc32_t crc;
 			bool ok;
 
-			printf("SIZE: %ld bytes\n",long(size));
-
 			for ( auto fileno: fileset ) {
-				const std::string path(files->pathname(fileno));
-				crc = crc32(path,size,ok);
+				s_file_ent& fent = files->lookup(fileno);
 
-				if ( ok )
-					printf("  path %s CRC32 0x%08X\n",path.c_str(),unsigned(crc));
-				else	printf("  path %s CRC32 error!\n",path.c_str());
+				if ( fent.error != 0 )
+					continue;
+
+				candidates2[size][fent.crc32].insert(fileno);
 			}
 		}
-#endif
+		candidates.clear();
+	}
+
+	unsigned cancount = 0;
+
+	for ( auto& pair : candidates2 ) {
+		auto& crc32map = pair.second;
+
+		if ( crc32map.size() > 1 ) {
+			for ( auto& pair2 : crc32map ) {
+				auto& fileset = pair2.second;
+				
+				if ( fileset.size() <= 1 )
+					cancount += fileset.size();
+			}
+		}
+	}
+
+	tracef(1,"CRC32 Dup Candidates: %u\n",cancount);
+
+	for ( auto& pair : candidates2 ) {
+		const size_t size = pair.first;
+		auto& crc32map = pair.second;
+		bool sizef = false;
+
+		if ( crc32map.size() > 1 ) {
+			for ( auto& pair2 : crc32map ) {
+				const crc32_t crc32 = pair2.first;
+				auto& fileset = pair2.second;
+				bool crcf = false;
+				
+				if ( fileset.size() <= 1 )
+					continue;
+
+				for ( auto file : fileset ) {
+					s_file_ent& fent = files->lookup(file);
+					std::string path(files->namestr_pathname(fent.path));
+					
+					if ( !sizef ) {
+						printf("SIZE: %ld bytes\n",long(size));
+						sizef = true;
+					}
+					if ( !crcf ) {
+						printf("  CRC32 %08X:\n",unsigned(crc32));
+						crcf = true;
+					}
+					printf("    %s\n",path.c_str());
+				}
+			}
+		}
 	}
 
 	puts("Exit..");

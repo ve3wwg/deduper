@@ -23,6 +23,7 @@
 #include <atomic>
 #include <queue>
 
+typedef uint32_t crc32_t;
 typedef uint64_t Fileno_t;
 typedef uint64_t Name_t;
 typedef std::basic_string<Name_t> NameStr_t;
@@ -36,6 +37,7 @@ struct s_file_ent {
 	timespec	st_mtimespec;	// Time of last modification
 	NameStr_t	path;		// Path to the file
 	uint32_t	crc32=0;	// CTC32 of first 1-k
+	int		error=0;	// Non-zero if open fails
 };
 
 template<typename T>
