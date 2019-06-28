@@ -21,6 +21,7 @@
 #include <thread>
 #include <vector>
 #include <set>
+#include <map>
 
 static const char *version = "0.1";
 
@@ -200,9 +201,9 @@ main(int argc,char **argv) {
 	}
 
 	if ( opt_verbose > 0 ) {
-		printf("Processing the following directories:\n");
+		tracef(1,"Processing the following directories:\n");
 		for ( auto& dir : opt_rootvec )
-			printf("  %s\n",dir.c_str());
+			tracef(1,"  %s\n",dir.c_str());
 	}
 
 	{
@@ -259,7 +260,7 @@ main(int argc,char **argv) {
 		long(name_pool.size()));
 
 	auto candidates = files->dup_candidates();
-	std::unordered_map<size_t,std::unordered_map<crc32_t,std::set<Fileno_t>>> candidates2;
+	std::map<size_t,std::unordered_map<crc32_t,std::set<Fileno_t>>> candidates2;
 
 	tracef(1,"There are %ld duplicate candidates\n",long(candidates.size()));
 
@@ -400,21 +401,20 @@ main(int argc,char **argv) {
 					std::string path(files->namestr_pathname(fent.path));
 					
 					if ( !sizef ) {
-						printf("SIZE: %ld bytes\n",long(size));
+						tracef(1,"SIZE: %ld bytes\n",long(size));
 						sizef = true;
 					}
 					if ( !crcf ) {
-						printf("  CRC32 %08X:\n",unsigned(crc32));
+						tracef(1,"  CRC32 %08X:\n",unsigned(crc32));
 						crcf = true;
 					}
-					printf("    %s\n",path.c_str());
+					tracef(1,"    %s\n",path.c_str());
 				}
 			}
 		}
 	}
 
-	puts("Exit..");
-	fflush(stdout);
+	tracef(1,"Exit.\n");
 
 	return exit_code;
 }
