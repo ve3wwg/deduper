@@ -35,6 +35,7 @@ static uint64_t opt_size = 0;
 
 Uid<Fileno_t> uid_pool;
 Names name_pool;
+Uid<dup_t> dup_pool;
 
 static Files *files = nullptr;
 static Queue<std::string> dir_queue;
@@ -380,7 +381,9 @@ main(int argc,char **argv) {
 		}
 	}
 
-	tracef(1,"CRC32 Dup Candidates: %u\n",cancount);
+	tracef(2,"CRC32 Dup Candidates: %u\n",cancount);
+
+	std::map<size_t,std::unordered_map<crc32_t,std::set<Fileno_t>>> final_candidates;
 
 	for ( auto& pair : candidates2 ) {
 		const size_t size = pair.first;
@@ -401,14 +404,84 @@ main(int argc,char **argv) {
 					std::string path(files->namestr_pathname(fent.path));
 					
 					if ( !sizef ) {
-						tracef(1,"SIZE: %ld bytes\n",long(size));
+						tracef(2,"SIZE: %ld bytes\n",long(size));
 						sizef = true;
 					}
 					if ( !crcf ) {
-						tracef(1,"  CRC32 %08X:\n",unsigned(crc32));
+						tracef(2,"  CRC32 %08X:\n",unsigned(crc32));
 						crcf = true;
 					}
-					tracef(1,"    %s\n",path.c_str());
+					final_candidates[size][crc32].insert(file);
+					tracef(2,"    %s\n",path.c_str());
+				}
+			}
+		}
+	}
+
+	std::map<size_t,std::unordered_map<Fileno_t,std::set<Fileno_t>>> duplicates;
+
+	tracef(1,"Final file comparisons:\n");
+
+	for ( auto& pair : final_candidates ) {
+		const size_t size = pair.first;
+		auto& crc32map = pair.second;
+		bool sizef = false;
+
+		for ( auto& pair2 : crc32map ) {
+			const crc32_t crc32 = pair2.first;
+			auto& fileset = pair2.second;
+			bool crcf = false;
+				
+			for ( auto file1 : fileset ) {
+				s_file_ent& fent1 = files->lookup(file1);
+				std::string path1(files->namestr_pathname(fent1.path));
+				const char *match;
+
+				if ( !sizef ) {
+					tracef(1,"SIZE: %ld bytes\n",long(size));
+					sizef = true;
+				}
+				if ( !crcf ) {
+					tracef(1,"  CRC32 %08X:\n",unsigned(crc32));
+					crcf = true;
+				}
+
+				for ( auto file2 : fileset ) {
+					if ( file2 == file1 )
+						continue;
+
+					s_file_ent& fent2 = files->lookup(file2);
+					std::string path2(files->namestr_pathname(fent2.path));
+
+					if ( fent1.duplicate != 0 && fent2.duplicate != 0 )
+						continue;	// Already evaluated
+
+					auto cmpf = files->compare_equal(file1,file2);
+
+					switch ( cmpf ) {
+					case Compare::Equal:
+						match = "Equal";
+						break;
+					case Compare::NotEqual:
+						match = "Not Equal";
+						break;
+					case Compare::Error:
+						match = "ERROR";
+						break;
+					}
+
+					if ( cmpf == Compare::Equal ) {
+						if ( !fent1.duplicate && !fent2.duplicate ) {
+							fent1.duplicate = fent2.duplicate = dup_pool.allocate();
+						} else if ( !fent1.duplicate ) {
+							fent1.duplicate = fent2.duplicate;
+						} else	{
+							// !fent2.duplicate
+							fent2.duplicate = fent1.duplicate;
+						}
+					}
+
+					tracef(1,"    %s vs %s : %s\n",path1.c_str(),path2.c_str(),match);
 				}
 			}
 		}
