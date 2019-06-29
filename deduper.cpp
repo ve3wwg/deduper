@@ -78,7 +78,7 @@ dive_dir(const std::string& directory,Files *files) {
 		}
 
 		if ( S_ISREG(sbuf.st_mode) ) {
-			if ( opt_size == 0 || opt_size <= sbuf.st_size ) {
+			if ( opt_size == 0 || off_t(opt_size) <= sbuf.st_size ) {
 				fileno = files->add(path.c_str());
 				tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
 			}
