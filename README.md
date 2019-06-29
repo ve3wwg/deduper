@@ -13,8 +13,8 @@ File De-duplication for Mac/Linux/*BSD
     $ ./deduper --help
     Usage: ./deduper [options] directories..
 
-        -h, --help	Help info.
+        -h, --help      Help info.
         -v, --verbose
         --version
-        --threads n	Defaults to 4
-        -s, --size n	Size >= n bytes
+        --threads n     Defaults to 4
+        -s, --size n    Size >= n bytes
