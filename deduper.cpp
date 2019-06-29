@@ -37,15 +37,14 @@ Uid<Fileno_t> uid_pool;
 Names name_pool;
 Uid<dup_t> dup_pool;
 
-static Files *files = nullptr;
+static GlobalFiles global_files(uid_pool);
 static Queue<std::string> dir_queue;
 
-std::vector<Files*> filevec;
 std::vector<std::thread> thvec;
 std::atomic<time_t> dive_depth(0);
 
 static void
-dive_dir(const std::string& directory,Files *files) {
+dive_dir(const std::string& directory) {
 	Dir dir;
 	std::string path;
 	struct stat sbuf;
@@ -64,7 +63,7 @@ dive_dir(const std::string& directory,Files *files) {
 	tracef(2,"Examining dir %s\n",directory.c_str());
 
 	while ( (rc = dir.read(path,"*",Dir::Any)) == 0 ) {
-		rc = ::stat(path.c_str(),&sbuf);
+		rc = ::lstat(path.c_str(),&sbuf);
 		if ( rc != 0 ) {
 			if ( errno == ENOENT ) {
 				::lstat(path.c_str(),&sbuf);
@@ -80,7 +79,7 @@ dive_dir(const std::string& directory,Files *files) {
 
 		if ( S_ISREG(sbuf.st_mode) ) {
 			if ( opt_size == 0 || off_t(opt_size) <= sbuf.st_size ) {
-				fileno = files->add(path.c_str());
+				fileno = global_files.add(path.c_str());
 				tracef(3,"%ld: file %s\n",long(fileno),path.c_str());
 			}
 		} else if ( S_ISDIR(sbuf.st_mode) ) {
@@ -100,7 +99,7 @@ dive_dir(const std::string& directory,Files *files) {
 }
 
 static void
-dive(Files *files) {
+dive() {
 	std::string dir;
 
 	for (;;) {
@@ -110,7 +109,7 @@ dive(Files *files) {
 			usleep(1000);
 			continue;
 		}
-		dive_dir(dir,files);
+		dive_dir(dir);
 	}
 }
 
@@ -191,11 +190,11 @@ main(int argc,char **argv) {
 
 		if ( optind < argc ) {
 			while ( optind < argc )
-				file_set.insert(Files::abspath(argv[optind++]));
+				file_set.insert(global_files.abspath(argv[optind++]));
 		}
 
 		if ( file_set.empty() )
-			file_set.insert(Files::abspath("."));
+			file_set.insert(global_files.abspath("."));
 
 		for ( auto& file : file_set )
 			opt_rootvec.push_back(file);
@@ -234,33 +233,18 @@ main(int argc,char **argv) {
 	//////////////////////////////////////////////////////////////
 
 	for ( int thx=0; thx<opt_threads; ++thx ) {
-		filevec.push_back(new Files);
-		thvec.emplace_back(std::thread(dive,filevec.back()));
+		thvec.emplace_back(std::thread(dive));
 	}
 
 	for ( auto& thread : thvec )
 		thread.join();
 	thvec.clear();
 
-	//////////////////////////////////////////////////////////////
-	// Merge file info
-	//////////////////////////////////////////////////////////////
-
-	tracef(2,"Merging %ld maps..\n",long(filevec.size()));
-
-	files = filevec.front();
-
-	for ( unsigned fx=1; fx < filevec.size(); ++fx ) {
-		files->merge(*filevec[fx]);
-		delete filevec[fx];
-	}
-	filevec.clear();
-
 	tracef(2,"%ld files registered, + %ld name ids\n",
-		long(files->size()),
+		long(global_files.size()),
 		long(name_pool.size()));
 
-	auto candidates = files->dup_candidates();
+	auto candidates = global_files.dup_candidates();
 	std::map<size_t,std::unordered_map<crc32_t,std::set<Fileno_t>>> candidates2;
 
 	{
@@ -276,8 +260,8 @@ main(int argc,char **argv) {
 		Queue<s_size_qent>	inq;
 
 		auto crc32 = [](Fileno_t fileno,size_t size,bool& ok) -> crc32_t {
-			s_file_ent& fent = files->lookup(fileno);
-			const std::string path(files->pathname(fileno));
+			s_file_ent& fent = global_files.lookup(fileno);
+			const std::string path(global_files.pathname(fileno));
 			char buf[size];
 			int fd = ::open(path.c_str(),O_RDONLY);
 			int rc;
@@ -303,7 +287,7 @@ main(int argc,char **argv) {
 
 			uint32_t crc = 0;
 
-			Files::crc32(crc,buf,sizeof buf);
+			global_files.crc32(crc,buf,sizeof buf);
 			fent.crc32 = crc;
 			fent.error = 0;
 			ok = true;
@@ -350,7 +334,7 @@ main(int argc,char **argv) {
 			bool ok;
 
 			for ( auto fileno: fileset ) {
-				s_file_ent& fent = files->lookup(fileno);
+				s_file_ent& fent = global_files.lookup(fileno);
 
 				if ( fent.error != 0 )
 					continue;
@@ -395,8 +379,8 @@ main(int argc,char **argv) {
 					continue;
 
 				for ( auto file : fileset ) {
-					s_file_ent& fent = files->lookup(file);
-					std::string path(files->namestr_pathname(fent.path));
+					s_file_ent& fent = global_files.lookup(file);
+					std::string path(global_files.namestr_pathname(fent.path));
 					
 					if ( !sizef ) {
 						tracef(2,"SIZE: %ld bytes\n",long(size));
@@ -407,7 +391,7 @@ main(int argc,char **argv) {
 						crcf = true;
 					}
 					final_candidates[size][crc32].insert(file);
-					tracef(2,"    %s\n",path.c_str());
+					tracef(2,"    %s (%ld)\n",path.c_str(),long(file));
 				}
 			}
 		}
@@ -428,8 +412,8 @@ main(int argc,char **argv) {
 			bool crcf = false;
 				
 			for ( auto file1 : fileset ) {
-				s_file_ent& fent1 = files->lookup(file1);
-				std::string path1(files->namestr_pathname(fent1.path));
+				s_file_ent& fent1 = global_files.lookup(file1);
+				std::string path1(global_files.namestr_pathname(fent1.path));
 				const char *match = "?";
 
 				if ( !sizef ) {
@@ -445,13 +429,13 @@ main(int argc,char **argv) {
 					if ( file2 == file1 )
 						continue;
 
-					s_file_ent& fent2 = files->lookup(file2);
-					std::string path2(files->namestr_pathname(fent2.path));
+					s_file_ent& fent2 = global_files.lookup(file2);
+					std::string path2(global_files.namestr_pathname(fent2.path));
 
 					if ( fent1.duplicate != 0 && fent2.duplicate != 0 )
 						continue;	// Already evaluated
 
-					auto cmpf = files->compare_equal(file1,file2);
+					auto cmpf = global_files.compare_equal(file1,file2);
 
 					switch ( cmpf ) {
 					case Compare::Equal:
@@ -480,7 +464,10 @@ main(int argc,char **argv) {
 						}
 					}
 
-					tracef(2,"    %s vs %s : %s\n",path1.c_str(),path2.c_str(),match);
+					tracef(2,"    %s (%ld) vs %s (%ld) : %s\n",
+						path1.c_str(),long(fent1.fileno),
+						path2.c_str(),long(fent2.fileno),
+						match);
 				}
 			}
 		}
@@ -498,8 +485,8 @@ main(int argc,char **argv) {
 
 			printf("  Duplicate set %ld, %ld bytes:\n",long(dup_id),long(size));
 			for ( auto fileno : fileset ) {
-				auto& fent = files->lookup(fileno);
-				const std::string path(files->namestr_pathname(fent.path));
+				auto& fent = global_files.lookup(fileno);
+				const std::string path(global_files.namestr_pathname(fent.path));
 
 				printf("    File %s\n",path.c_str());
 			}
