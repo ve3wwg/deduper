@@ -63,6 +63,7 @@ public:	Names() {}
 	Name_t name_register(const char *name);
 	std::string lookup(Name_t name_id);
 	size_t size() { return names.size(); }
+	NameStr_t add_names(std::list<std::string>& list_path);
 };
 
 template<typename T>
@@ -133,24 +134,23 @@ enum class Compare {
 	Error
 };
 
-class Files {
+class GlobalFiles {
+	std::recursive_mutex				mutex;
 	std::unordered_map<Fileno_t,s_file_ent> 	fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
 	std::unordered_map<off_t,std::unordered_set<Fileno_t>> by_size;
+	Uid<Fileno_t>&					file_pool;
 
-	NameStr_t add_names(std::list<std::string>& list_path);
-
-public:	Files() {};
+public:	GlobalFiles(Uid<Fileno_t>& fpool) : file_pool(fpool) {}
 	Fileno_t add(const char *path);
-	void merge(const Files& other);
+	size_t size() { return fmap.size(); }
 	s_file_ent& lookup(dev_t dev,ino_t ino);
 	s_file_ent& lookup(Fileno_t fileno);
-	std::unordered_map<off_t,std::unordered_set<Fileno_t>> dup_candidates();
 
-	size_t size() { return fmap.size(); }
 	std::string namestr_pathname(const NameStr_t& path);
 	std::string pathname(Fileno_t file);
 	Compare compare_equal(Fileno_t f1,Fileno_t f2);
+	std::unordered_map<off_t,std::unordered_set<Fileno_t>> dup_candidates();
 
 	static std::string abspath(const char *filename);
 	static std::list<std::string> pathparse(const char *pathname);
