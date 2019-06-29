@@ -69,7 +69,7 @@ dive_dir(const std::string& directory,Files *files) {
 			if ( errno == ENOENT ) {
 				::lstat(path.c_str(),&sbuf);
 				if ( S_ISLNK(sbuf.st_mode) ) {
-					fprintf(stderr,"Ignoring symlink %s\n",path.c_str());
+					tracef(2,"Ignoring symlink %s\n",path.c_str());
 					continue;
 				}
 			}
@@ -246,7 +246,7 @@ main(int argc,char **argv) {
 	// Merge file info
 	//////////////////////////////////////////////////////////////
 
-	tracef(1,"Merging %ld maps..\n",long(filevec.size()));
+	tracef(2,"Merging %ld maps..\n",long(filevec.size()));
 
 	files = filevec.front();
 
@@ -256,14 +256,12 @@ main(int argc,char **argv) {
 	}
 	filevec.clear();
 
-	tracef(1,"%ld files registered, + %ld name ids\n",
+	tracef(2,"%ld files registered, + %ld name ids\n",
 		long(files->size()),
 		long(name_pool.size()));
 
 	auto candidates = files->dup_candidates();
 	std::map<size_t,std::unordered_map<crc32_t,std::set<Fileno_t>>> candidates2;
-
-	tracef(1,"There are %ld duplicate candidates\n",long(candidates.size()));
 
 	{
 		std::unordered_map<crc32_t,std::unordered_set<Fileno_t>> candidates_crc32;
@@ -345,9 +343,6 @@ main(int argc,char **argv) {
 			thread.join();
 		tvec.clear();
 
-		tracef(1,"Done CRC32 1k calcs.\n");
-		fflush(stdout);
-
 		for ( auto& pair : candidates ) {
 			const off_t size = pair.first;
 			const auto& fileset = pair.second;
@@ -418,9 +413,9 @@ main(int argc,char **argv) {
 		}
 	}
 
-	std::map<size_t,std::unordered_map<Fileno_t,std::set<Fileno_t>>> duplicates;
+	std::map<size_t,std::map<dup_t,std::set<Fileno_t>>> dups;
 
-	tracef(1,"Final file comparisons:\n");
+	tracef(2,"Final file comparisons:\n");
 
 	for ( auto& pair : final_candidates ) {
 		const size_t size = pair.first;
@@ -438,11 +433,11 @@ main(int argc,char **argv) {
 				const char *match = "?";
 
 				if ( !sizef ) {
-					tracef(1,"SIZE: %ld bytes\n",long(size));
+					tracef(2,"SIZE: %ld bytes\n",long(size));
 					sizef = true;
 				}
 				if ( !crcf ) {
-					tracef(1,"  CRC32 %08X:\n",unsigned(crc32));
+					tracef(2,"  CRC32 %08X:\n",unsigned(crc32));
 					crcf = true;
 				}
 
@@ -473,16 +468,40 @@ main(int argc,char **argv) {
 					if ( cmpf == Compare::Equal ) {
 						if ( !fent1.duplicate && !fent2.duplicate ) {
 							fent1.duplicate = fent2.duplicate = dup_pool.allocate();
+							dups[size][fent1.duplicate].insert(file1);
+							dups[size][fent2.duplicate].insert(file2);
 						} else if ( !fent1.duplicate ) {
 							fent1.duplicate = fent2.duplicate;
+							dups[size][fent1.duplicate].insert(file1);
 						} else	{
 							// !fent2.duplicate
 							fent2.duplicate = fent1.duplicate;
+							dups[size][fent2.duplicate].insert(file2);
 						}
 					}
 
-					tracef(1,"    %s vs %s : %s\n",path1.c_str(),path2.c_str(),match);
+					tracef(2,"    %s vs %s : %s\n",path1.c_str(),path2.c_str(),match);
 				}
+			}
+		}
+	}
+
+	tracef(1,"LIST OF DUPLICATE FILES:\n");
+
+	for ( auto pair : dups ) {
+		const size_t size = pair.first;
+		auto& dupmap = pair.second;
+
+		for ( auto pair2 : dupmap ) {
+			const dup_t dup_id = pair2.first;
+			const auto& fileset = pair2.second;
+
+			tracef(1,"  Duplicate set %ld, %ld bytes:\n",long(dup_id),long(size));
+			for ( auto fileno : fileset ) {
+				auto& fent = files->lookup(fileno);
+				const std::string path(files->namestr_pathname(fent.path));
+
+				printf("    File %s\n",path.c_str());
 			}
 		}
 	}
