@@ -8,7 +8,7 @@ LDFLAGS		= -L/usr/local/lib
 
 TARGETS = deduper
 
-all:	Makefile.deps $(TARGETS)
+all:	$(TARGETS)
 
 install: all
 
@@ -32,7 +32,7 @@ clobber: clean
 	@rm -f .errs.t
 	rm -f $(TARGETS)
 
-include Makefile.incl
+-include Makefile.incl
 
 ######################################################################
 #  Dependencies

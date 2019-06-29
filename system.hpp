@@ -48,9 +48,9 @@ template<typename T>
 class Uid {
 	std::atomic<T>	next_uid;
 
-public:	Uid() : next_uid(1) { next_uid.store(0); }
+public:	Uid() : next_uid(1) { }
 	uint64_t allocate() {
-		return next_uid++;
+		return ++next_uid;
 	}
 };
 
