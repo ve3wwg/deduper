@@ -47,7 +47,7 @@ Names::lookup(Name_t name_id) {
 }
 
 std::string
-Files::abspath(const char *filename) {
+GlobalFiles::abspath(const char *filename) {
 	char buf[PATH_MAX+1];
 
 	realpath(filename,buf);
@@ -55,7 +55,7 @@ Files::abspath(const char *filename) {
 }
 
 std::list<std::string>
-Files::pathparse(const char *pathname) {
+GlobalFiles::pathparse(const char *pathname) {
 	std::list<std::string> list;
 	char buf[strlen(pathname)+1];
 	char *ep;
@@ -76,7 +76,7 @@ Files::pathparse(const char *pathname) {
 }
 
 NameStr_t
-Files::add_names(std::list<std::string>& list_path) {
+Names::add_names(std::list<std::string>& list_path) {
 	NameStr_t names_path;
 	Name_t id;
 
@@ -88,42 +88,44 @@ Files::add_names(std::list<std::string>& list_path) {
 }
 
 Fileno_t
-Files::add(const char *path) {
+GlobalFiles::add(const char *path) {
+	std::list<std::string> list = pathparse(abspath(path).c_str());
+	std::lock_guard<std::recursive_mutex> lock(mutex);
 	struct stat sinfo;
-	std::list<std::string> list = Files::pathparse(Files::abspath(path).c_str());
 	int rc;
+	extern Names name_pool;
 
 	rc = stat(path,&sinfo);
 	assert(!rc);
 
-	// Make sure there is no duplicate
-	auto it = rmap.find(sinfo.st_dev);
-	if ( it != rmap.end() ) {
-		auto& r2map = it->second;
-		auto i2 = r2map.find(sinfo.st_ino);
-		assert(i2 == r2map.end());
-	}
-
-	Fileno_t fileno = uid_pool.allocate();
-	s_file_ent& fent = fmap[fileno];
-	fent.fileno = fileno;
-	fent.st_dev = sinfo.st_dev;
-	fent.st_ino = sinfo.st_ino;
-	fent.st_size = sinfo.st_size;
-	fent.st_nlink = sinfo.st_nlink;
+	auto& devmap = rmap[sinfo.st_dev];
+	auto it = devmap.find(sinfo.st_ino);
+	if ( it == devmap.end() ) {
+		Fileno_t fileno = uid_pool.allocate();
+		s_file_ent& fent = fmap[fileno];
+		fent.fileno = fileno;
+		fent.st_dev = sinfo.st_dev;
+		fent.st_ino = sinfo.st_ino;
+		fent.st_size = sinfo.st_size;
+		fent.st_nlink = sinfo.st_nlink;
 #if ST_MTIMESPEC
-	fent.st_mtimespec = sinfo.st_mtimespec;
+		fent.st_mtimespec = sinfo.st_mtimespec;
 #else
-	fent.st_mtimespec.tv_sec = sinfo.st_mtime;
-	fent.st_mtimespec.tv_nsec = 0;
+		fent.st_mtimespec.tv_sec = sinfo.st_mtime;
+		fent.st_mtimespec.tv_nsec = 0;
 #endif
-	fent.path = Files::add_names(list);
 
-	// Track files by size
-	by_size[fent.st_size].insert(fileno);
-	return fileno;
+		fent.path = name_pool.add_names(list);
+
+		// Track files by size
+		by_size[fent.st_size].insert(fileno);
+		return fent.fileno;
+	}
+	
+	return it->second;
 }
 
+#if 0
 void
 Files::merge(const Files& other) {
 	
@@ -136,9 +138,12 @@ Files::merge(const Files& other) {
 		by_size[fent.st_size].insert(fileno);
 	}
 }
+#endif
 
 s_file_ent&
-Files::lookup(dev_t dev,ino_t ino) {
+GlobalFiles::lookup(dev_t dev,ino_t ino) {
+	std::lock_guard<std::recursive_mutex> lock(mutex);
+
 	auto it = rmap.find(dev);
 	assert(it != rmap.end());
 	auto r2map = it->second;
@@ -148,14 +153,16 @@ Files::lookup(dev_t dev,ino_t ino) {
 }
 
 s_file_ent&
-Files::lookup(Fileno_t fileno) {
+GlobalFiles::lookup(Fileno_t fileno) {
+	std::lock_guard<std::recursive_mutex> lock(mutex);
+
 	auto it = fmap.find(fileno);
 	assert(it != fmap.end());
 	return it->second;
 }
 
 std::unordered_map<off_t,std::unordered_set<Fileno_t>>
-Files::dup_candidates() {
+GlobalFiles::dup_candidates() {
 	std::unordered_map<off_t,std::unordered_set<Fileno_t>> candidates;
 
 	for ( auto& pair : by_size ) {
@@ -168,7 +175,7 @@ Files::dup_candidates() {
 }
 
 std::string
-Files::namestr_pathname(const NameStr_t& path) {
+GlobalFiles::namestr_pathname(const NameStr_t& path) {
 	std::stringstream ss;
 
 	for ( auto name_id : path ) {
@@ -181,7 +188,7 @@ Files::namestr_pathname(const NameStr_t& path) {
 }
 
 std::string
-Files::pathname(Fileno_t file) {
+GlobalFiles::pathname(Fileno_t file) {
 
 	auto it = fmap.find(file);
 	if ( it == fmap.end() )
@@ -192,7 +199,7 @@ Files::pathname(Fileno_t file) {
 }
 
 Compare
-Files::compare_equal(Fileno_t f1,Fileno_t f2) {
+GlobalFiles::compare_equal(Fileno_t f1,Fileno_t f2) {
 	std::string path1 = pathname(f1);
 	std::string path2 = pathname(f2);
 
