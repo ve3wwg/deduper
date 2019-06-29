@@ -486,7 +486,7 @@ main(int argc,char **argv) {
 		}
 	}
 
-	tracef(1,"LIST OF DUPLICATE FILES:\n");
+	printf("LIST OF DUPLICATE FILES:\n");
 
 	for ( auto pair : dups ) {
 		const size_t size = pair.first;
@@ -496,7 +496,7 @@ main(int argc,char **argv) {
 			const dup_t dup_id = pair2.first;
 			const auto& fileset = pair2.second;
 
-			tracef(1,"  Duplicate set %ld, %ld bytes:\n",long(dup_id),long(size));
+			printf("  Duplicate set %ld, %ld bytes:\n",long(dup_id),long(size));
 			for ( auto fileno : fileset ) {
 				auto& fent = files->lookup(fileno);
 				const std::string path(files->namestr_pathname(fent.path));
