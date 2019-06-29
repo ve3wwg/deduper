@@ -191,6 +191,38 @@ Files::pathname(Fileno_t file) {
 	return namestr_pathname(fent.path);
 }
 
+Compare
+Files::compare_equal(Fileno_t f1,Fileno_t f2) {
+	std::string path1 = pathname(f1);
+	std::string path2 = pathname(f2);
+
+	if ( path1.empty() || path2.empty() )
+		return Compare::Error;
+
+	File_Guard fg1(path1.c_str());
+	File_Guard fg2(path2.c_str());
+	off_t offset = 0;
+	char buf1[4096], buf2[sizeof buf1];
+	int rc1, rc2;
+
+	if ( fg1.fd < 0 || fg2.fd < 0 )
+		return Compare::Error;
+
+	for ( offset=0; ; offset += sizeof buf1 ) {
+		rc1 = fg1.read(buf1,sizeof buf1,offset);
+		rc2 = fg2.read(buf2,sizeof buf2,offset);
+		if ( rc1 == -1 || rc2 == -1 )
+			return Compare::Error;
+		else if ( rc1 != rc2 )
+			return Compare::NotEqual;
+		if ( memcmp(buf1,buf2,sizeof buf1) != 0 )
+			return Compare::NotEqual;
+		if ( rc1 == 0 )
+			break;
+	}
+	return Compare::Equal;	
+}
+
 void
 vtracef(int level,const char *format,va_list ap) {
 	extern int opt_verbose;

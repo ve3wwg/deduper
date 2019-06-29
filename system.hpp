@@ -10,6 +10,7 @@
 
 #include <stdarg.h>
 #include <stdint.h>
+#include <fcntl.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -27,6 +28,7 @@ typedef uint32_t crc32_t;
 typedef uint64_t Fileno_t;
 typedef uint64_t Name_t;
 typedef std::basic_string<Name_t> NameStr_t;
+typedef uint32_t dup_t;
 
 struct s_file_ent {
 	Fileno_t	fileno;		// Internal file number
@@ -38,6 +40,7 @@ struct s_file_ent {
 	NameStr_t	path;		// Path to the file
 	uint32_t	crc32=0;	// CTC32 of first 1-k
 	int		error=0;	// Non-zero if open fails
+	dup_t		duplicate=0;	// Non-zero when duplicate ID
 };
 
 template<typename T>
@@ -84,6 +87,51 @@ public:	Queue() {}
 extern Uid<Fileno_t>	uid_pool;
 extern Names		name_pool;
 
+class File_Guard {
+public:
+	int		fd = -1;
+	int		error = 0;
+
+	File_Guard(const char *path=nullptr) {
+		if ( path )
+			open(path);
+	};
+	~File_Guard() {
+		if ( fd >= 0 ) {
+			::close(fd);
+			fd = -1;
+		}
+	}
+	int open(const char *pathname) {
+		fd = ::open(pathname,O_RDONLY);
+		if ( fd == -1 )
+			error = errno;
+		else	error = 0;
+		return fd;
+	}
+	int read(void *buf,size_t bytes,off_t offset) {
+		int rc;
+		do	{
+			rc = pread(fd,buf,bytes,offset);
+		} while ( rc == -1 && errno == EINTR );
+		if ( rc == -1 )
+			error = errno;
+		return rc;
+	}
+	void close() {
+		if ( fd >= 0 ) {
+			::close(fd);
+			fd = -1;
+		}
+	}
+};
+
+enum class Compare {
+	Equal,
+	NotEqual,
+	Error
+};
+
 class Files {
 	std::unordered_map<Fileno_t,s_file_ent> 	fmap;
 	std::unordered_map<dev_t,std::unordered_map<ino_t,Fileno_t>> rmap;
@@ -101,6 +149,7 @@ public:	Files() {};
 	size_t size() { return fmap.size(); }
 	std::string namestr_pathname(const NameStr_t& path);
 	std::string pathname(Fileno_t file);
+	Compare compare_equal(Fileno_t f1,Fileno_t f2);
 
 	static std::string abspath(const char *filename);
 	static std::list<std::string> pathparse(const char *pathname);
