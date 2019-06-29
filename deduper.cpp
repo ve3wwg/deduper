@@ -435,7 +435,7 @@ main(int argc,char **argv) {
 			for ( auto file1 : fileset ) {
 				s_file_ent& fent1 = files->lookup(file1);
 				std::string path1(files->namestr_pathname(fent1.path));
-				const char *match;
+				const char *match = "?";
 
 				if ( !sizef ) {
 					tracef(1,"SIZE: %ld bytes\n",long(size));

@@ -215,7 +215,7 @@ Files::compare_equal(Fileno_t f1,Fileno_t f2) {
 			return Compare::Error;
 		else if ( rc1 != rc2 )
 			return Compare::NotEqual;
-		if ( memcmp(buf1,buf2,sizeof buf1) != 0 )
+		if ( memcmp(buf1,buf2,rc1) != 0 )
 			return Compare::NotEqual;
 		if ( rc1 == 0 )
 			break;
