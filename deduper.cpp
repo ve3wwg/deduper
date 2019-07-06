@@ -340,6 +340,9 @@ main(int argc,char **argv) {
 					continue;
 
 				candidates2[size][fent.crc32].insert(fileno);
+				std::string path(global_files.namestr_pathname(fent.path));
+				tracef(2,"File crc32 %08X size %9ld file %ld %s\n",
+					fent.crc32,long(size),size_t(fileno),path.c_str());
 			}
 		}
 		candidates.clear();
@@ -348,15 +351,15 @@ main(int argc,char **argv) {
 	unsigned cancount = 0;
 
 	for ( auto& pair : candidates2 ) {
+		const size_t size = pair.first;
 		auto& crc32map = pair.second;
 
-		if ( crc32map.size() > 1 ) {
-			for ( auto& pair2 : crc32map ) {
-				auto& fileset = pair2.second;
+		for ( auto& pair2 : crc32map ) {
+			const crc32_t crc = pair2.first;
+			auto& fileset = pair2.second;
 				
-				if ( fileset.size() <= 1 )
-					cancount += fileset.size();
-			}
+			if ( fileset.size() >= 2 )
+				cancount += fileset.size();
 		}
 	}
 
@@ -367,32 +370,19 @@ main(int argc,char **argv) {
 	for ( auto& pair : candidates2 ) {
 		const size_t size = pair.first;
 		auto& crc32map = pair.second;
-		bool sizef = false;
 
-		if ( crc32map.size() > 1 ) {
-			for ( auto& pair2 : crc32map ) {
-				const crc32_t crc32 = pair2.first;
-				auto& fileset = pair2.second;
-				bool crcf = false;
+		for ( auto& pair2 : crc32map ) {
+			const crc32_t crc32 = pair2.first;
+			auto& fileset = pair2.second;
 				
-				if ( fileset.size() <= 1 )
-					continue;
+			if ( fileset.size() <= 1 )
+				continue;
 
-				for ( auto file : fileset ) {
-					s_file_ent& fent = global_files.lookup(file);
-					std::string path(global_files.namestr_pathname(fent.path));
+			for ( auto file : fileset ) {
+				s_file_ent& fent = global_files.lookup(file);
+				std::string path(global_files.namestr_pathname(fent.path));
 					
-					if ( !sizef ) {
-						tracef(2,"SIZE: %ld bytes\n",long(size));
-						sizef = true;
-					}
-					if ( !crcf ) {
-						tracef(2,"  CRC32 %08X:\n",unsigned(crc32));
-						crcf = true;
-					}
-					final_candidates[size][crc32].insert(file);
-					tracef(2,"    %s (%ld)\n",path.c_str(),long(file));
-				}
+				final_candidates[size][crc32].insert(file);
 			}
 		}
 	}
@@ -489,6 +479,11 @@ main(int argc,char **argv) {
 				const std::string path(global_files.namestr_pathname(fent.path));
 
 				printf("    File %s\n",path.c_str());
+				for ( auto& nstr : fent.links ) {
+					const std::string lpath(global_files.namestr_pathname(nstr));
+
+					printf("      ln %s\n",lpath.c_str());
+				}
 			}
 		}
 	}
