@@ -18,7 +18,7 @@ XOBJS	= system.x1o dir.o
 LDFLAGS = -lpthread
 
 deduper: $(OBJS)
-	$(CXX) -o deduper $(OBJS) $(LDFLAGS)
+	$(CXX) -o deduper $(OBJS) -Bstatic $(LDFLAGS)
 
 test_system: $(XOBJS)
 	$(CXX) -o a.out $(XOBJS)  $(LDFLAGS)
