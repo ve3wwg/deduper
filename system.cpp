@@ -57,11 +57,12 @@ GlobalFiles::abspath(const char *filename) {
 std::list<std::string>
 GlobalFiles::pathparse(const char *pathname) {
 	std::list<std::string> list;
-	char buf[strlen(pathname)+1];
+	size_t slen = strlen(pathname);
+	char buf[slen+1];
 	char *ep;
 
-	strncpy(buf,pathname,sizeof buf);
-	buf[sizeof buf-1] = 0;
+	memcpy(buf,pathname,slen);
+	buf[slen] = 0;
 
 	for ( char *cp = buf; cp && *cp; cp = ep + 1 ) {
 		if ( (ep = strchr(cp,'/')) != nullptr )

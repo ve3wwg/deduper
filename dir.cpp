@@ -64,7 +64,12 @@ Dir::read(std::string& name) {
 	
 	if ( !rc ) {
 		char dname[NAME_MAX+1];
-		strncpy(dname,dentry.d_name,NAME_MAX)[NAME_MAX] = 0;
+		size_t slen = strlen(dentry.d_name);
+
+		if ( slen > NAME_MAX )
+			slen = NAME_MAX;
+		memcpy(dname,dentry.d_name,slen);
+		dname[slen] = 0;
 		name = dname;
 	}
 	

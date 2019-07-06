@@ -342,7 +342,7 @@ main(int argc,char **argv) {
 				candidates2[size][fent.crc32].insert(fileno);
 				std::string path(global_files.namestr_pathname(fent.path));
 				tracef(2,"File crc32 %08X size %9ld file %ld %s\n",
-					fent.crc32,long(size),size_t(fileno),path.c_str());
+					unsigned(fent.crc32),long(size),long(fileno),path.c_str());
 			}
 		}
 		candidates.clear();
