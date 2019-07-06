@@ -15,7 +15,8 @@ INCL		= -I/usr/local/include -I$(TOPDIR)/include
 
 CXXFLAGS	= -std=$(STD) -Wall -Wno-deprecated -fpermissive $(INCL) -fstrict-aliasing
 
-OPTZ		?= -g -Og
+#OPTZ		?= -g -Og
+OPTZ		?= -O3
 
 .cpp.o:
 	$(CXX) -c $(CXXFLAGS) $(OPTZ) $< -o $*.o
