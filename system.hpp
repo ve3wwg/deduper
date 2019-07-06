@@ -24,6 +24,7 @@
 #include <string>
 #include <atomic>
 #include <queue>
+#include <set>
 
 typedef uint32_t crc32_t;
 typedef uint64_t Fileno_t;
@@ -42,6 +43,7 @@ struct s_file_ent {
 	uint32_t	crc32=0;	// CTC32 of first 1-k
 	int		error=0;	// Non-zero if open fails
 	dup_t		duplicate=0;	// Non-zero when duplicate ID
+	std::set<NameStr_t> links;	// Hard links to same content
 };
 
 template<typename T>
