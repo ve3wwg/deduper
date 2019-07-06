@@ -95,12 +95,14 @@ GlobalFiles::add(const char *path) {
 	int rc;
 	extern Names name_pool;
 
-	rc = stat(path,&sinfo);
+	rc = lstat(path,&sinfo);
 	assert(!rc);
 
-	auto& devmap = rmap[sinfo.st_dev];
-	auto it = devmap.find(sinfo.st_ino);
-	if ( it == devmap.end() ) {
+	assert(S_ISREG(sinfo.st_mode));
+
+	auto& inomap = rmap[sinfo.st_dev];
+	auto it = inomap.find(sinfo.st_ino);
+	if ( it == inomap.end() ) {
 		Fileno_t fileno = uid_pool.allocate();
 		s_file_ent& fent = fmap[fileno];
 		fent.fileno = fileno;
@@ -114,31 +116,22 @@ GlobalFiles::add(const char *path) {
 		fent.st_mtimespec.tv_sec = sinfo.st_mtime;
 		fent.st_mtimespec.tv_nsec = 0;
 #endif
-
 		fent.path = name_pool.add_names(list);
+
+		// Track by device & inode
+		rmap[sinfo.st_dev][sinfo.st_ino] = fileno;
 
 		// Track files by size
 		by_size[fent.st_size].insert(fileno);
 		return fent.fileno;
 	}
-	
-	return it->second;
-}
 
-#if 0
-void
-Files::merge(const Files& other) {
-	
-	for ( const auto& pair : other.fmap ) {
-		const Fileno_t fileno = pair.first;
-		const s_file_ent& fent = pair.second;
+	Fileno_t fileno = it->second;
+	s_file_ent& fent = fmap.at(fileno);
 
-		fmap[fileno] = fent;
-		rmap[fent.st_dev][fent.st_ino] = fileno;
-		by_size[fent.st_size].insert(fileno);
-	}
+	fent.links.insert(name_pool.add_names(list)); // Hard links to same content
+	return fileno;
 }
-#endif
 
 s_file_ent&
 GlobalFiles::lookup(dev_t dev,ino_t ino) {
